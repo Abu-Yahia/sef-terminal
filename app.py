@@ -29,7 +29,38 @@ def get_technical_levels(ticker):
         return round(support, 2), round(resistance, 2), round(ema_200, 2), status
     except:
         return None, None, None, None
+from fpdf import FPDF
+import base64
 
+def create_download_link(ticker, price, anchor, target, rr, qty, status):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    
+    # Title
+    pdf.cell(200, 10, txt="SEF Terminal - Trade Executive Summary", ln=True, align='C')
+    pdf.ln(10)
+    
+    # Content
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt=f"Ticker Symbol: {ticker}", ln=True)
+    pdf.cell(200, 10, txt=f"Market Price: {price}", ln=True)
+    pdf.cell(200, 10, txt=f"Anchor Level (SL): {anchor}", ln=True)
+    pdf.cell(200, 10, txt=f"Target Price: {target}", ln=True)
+    pdf.cell(200, 10, txt=f"Risk:Reward Ratio: 1:{round(rr, 2)}", ln=True)
+    pdf.cell(200, 10, txt=f"Suggested Quantity: {qty} shares", ln=True)
+    pdf.cell(200, 10, txt=f"Market Status: {status}", ln=True)
+    
+    # Recommendation
+    pdf.ln(10)
+    recommendation = "APPROVED" if rr >= 3 else "REJECTED (High Risk)"
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, txt=f"Final Decision: {recommendation}", ln=True)
+    
+    # Convert PDF to bytes
+    pdf_output = pdf.output(dest='S').encode('latin-1')
+    b64 = base64.b64encode(pdf_output).decode()
+    return f'<a href="data:application/octet-stream;base64,{b64}" download="SEF_{ticker}_Report.pdf">📥 Click here to Download Report</a>'
 # --- Main Interface ---
 st.title("🛡️ SEF Terminal | Technical Radar")
 
@@ -80,6 +111,10 @@ if st.button("Analyze Trade & Show Chart"):
         k2.metric("Risk:Reward", f"1:{round(rr_ratio, 2)}")
         k3.metric("Shares to Buy", f"{quantity}")
         k4.metric("Risk Amount", f"{round(risk_amount, 2)}")
+        if st.button("Generate PDF Report"):
+    tmp_status = st.session_state.get('market_status', 'N/A')
+    report_link = create_download_link(ticker, current_price, anchor_level, target_price, rr_ratio, quantity, tmp_status)
+    st.markdown(report_link, unsafe_allow_html=True)
 
         # --- Visual Charting ---
         st.subheader("Advanced Technical Chart")
@@ -93,3 +128,4 @@ if st.button("Analyze Trade & Show Chart"):
             st.warning("⚠️ Caution: Risk/Reward ratio is below the 1:3 institutional standard.")
     else:
         st.error("Invalid Ticker Symbol.")
+

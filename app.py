@@ -28,7 +28,7 @@ def generate_pdf_link(content, ticker):
         pdf.cell(200, 10, txt="SEF STRATEGIC ANALYSIS", ln=True, align='C')
         pdf.ln(5)
         pdf.set_font("Arial", size=10)
-        pdf.cell(200, 10, txt="Created By Abu Yahia", ln=True, align='C') # التوقيع في الـ PDF
+        pdf.cell(200, 10, txt="Created By Abu Yahia", ln=True, align='L') # توقيع يسار في PDF
         pdf.ln(10)
         clean_text = content.encode('ascii', 'ignore').decode('ascii')
         for line in clean_text.split('\n'):
@@ -39,23 +39,24 @@ def generate_pdf_link(content, ticker):
     except: return "⚠️ PDF Error"
 
 # --- 2. واجهة المستخدم ---
+# العنوان الرئيسي
 st.title("🛡️ SEF Terminal | Ultimate Hub")
 
-# إضافة توقيعك في المكان المطلوب (تحت العنوان مباشرة)
-st.markdown("<h4 style='text-align: center; color: #666;'>Created By Abu Yahia</h4>", unsafe_allow_html=True)
+# التوقيع: محاذاة لليسار تحت SEF مع رمز القلم 🖋️
+st.markdown("<div style='text-align: left; padding-left: 50px; margin-top: -20px; color: #555; font-size: 1.1em;'>🖋️ Created By Abu Yahia</div>", unsafe_allow_html=True)
 
-# السايدبار
+# السايدبار لإعدادات المحفظة
 balance = st.sidebar.number_input("Portfolio Balance", value=100000)
 risk_pct = st.sidebar.slider("Risk per Trade (%)", 0.5, 5.0, 1.0)
 
-# إدارة الذاكرة التفاعلية
+# إدارة الذاكرة التفاعلية للقيم
 if 'p_val' not in st.session_state: st.session_state['p_val'] = 33.90
 if 'a_val' not in st.session_state: st.session_state['a_val'] = 31.72
 if 't_val' not in st.session_state: st.session_state['t_val'] = 39.36
 
 st.markdown("---")
 
-# صف المدخلات والأزرار (كلهم بجانب بعض)
+# صف المدخلات والأزرار التفاعلية
 c1, c2, c3, c4, c5, c6 = st.columns([1.5, 1.2, 1.2, 1.2, 1.2, 1.5])
 
 with c1:
@@ -81,7 +82,7 @@ with c6:
 
 st.markdown("---")
 
-# --- 3. عرض التحليل ---
+# --- 3. عرض التحليل الذكي ---
 if analyze_trigger:
     risk_per_share = abs(p_in - a_in)
     risk_cash = balance * (risk_pct / 100)
@@ -91,22 +92,22 @@ if analyze_trigger:
         qty = math.floor(risk_cash / risk_per_share)
     else: rr, qty = 0, 0
 
-    # التقييم
+    # تقييم العائد مقابل المخاطرة
     if rr >= 3: rr_advice = "🟢 EXCELLENT (Professional Grade)"
     elif 2 <= rr < 3: rr_advice = "🟡 GOOD (Acceptable Trade)"
-    else: rr_advice = "🔴 DANGEROUS (Avoid - Statistical Suicide)"
+    else: rr_advice = "🔴 DANGEROUS (Avoid - Poor Reward)"
 
-    # عرض المتريكس
+    # عرض الأرقام الرئيسية (Metrics)
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Live Price", p_in)
     m2.metric("R:R Ratio", f"1:{round(rr, 2)}")
     m3.metric("Shares", qty)
     m4.metric("Risk Cash", f"{round(risk_cash, 2)}")
 
-    # نص التقرير
+    # بناء نص التقرير
     full_report = f"""
 SEF STRATEGIC ANALYSIS REPORT
-Created By Abu Yahia
+🖋️ Created By Abu Yahia
 ------------------------------------
 Ticker: {ticker} | Price: {p_in}
 1. LEVELS:
@@ -122,9 +123,11 @@ RESULT: {rr_advice}
     """
     st.markdown("### 📄 SEF Structural Analysis")
     st.code(full_report, language='text')
+    
+    # رابط تحميل PDF المحدث
     st.markdown(generate_pdf_link(full_report, ticker), unsafe_allow_html=True)
 
-    # الشارت
+    # الشارت الفني مع المتوسط 200
     hist = yf.Ticker(ticker).history(period="1y")
     if not hist.empty:
         c_data = hist[['Close']].copy()

@@ -5,10 +5,17 @@ import math
 from fpdf import FPDF
 import base64
 
-# --- إعدادات الصفحة ---
-st.set_page_config(page_title="SEF Terminal Pro", page_icon="🛡️", layout="wide")
+# --- 1. إعدادات الصفحة والأيقونة الاحترافية (الروبوت) ---
+# ملاحظة: تم وضع رابط الصورة التي اخترتها لتظهر كأيقونة في المتصفح وعند التثبيت
+icon_url = "https://i.ibb.co/vzR0jXJX/robot-icon.png" # تأكد أن الرابط مباشر للصورة
 
-# --- 1. الدوال الأساسية ---
+st.set_page_config(
+    page_title="SEF Terminal Pro", 
+    page_icon=icon_url, 
+    layout="wide"
+)
+
+# --- 2. الدوال الأساسية ---
 def fetch_live_data(ticker_symbol):
     try:
         stock = yf.Ticker(ticker_symbol)
@@ -28,7 +35,6 @@ def generate_pdf_link(content, ticker):
         pdf.cell(200, 10, txt="SEF STRATEGIC ANALYSIS", ln=True, align='C')
         pdf.ln(5)
         pdf.set_font("Arial", size=10)
-        # إخلاء المسؤولية في الـ PDF
         pdf.cell(200, 7, txt="Created By Abu Yahia", ln=True, align='L')
         pdf.set_text_color(200, 0, 0)
         pdf.cell(200, 7, txt="Disclaimer: Educational purposes only. Not financial advice.", ln=True, align='L')
@@ -42,32 +48,28 @@ def generate_pdf_link(content, ticker):
         return f'<a href="data:application/octet-stream;base64,{b64}" download="SEF_{ticker}_Report.pdf" style="background-color: #ff4b4b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; margin-top: 10px;">📥 Download PDF Report</a>'
     except: return "⚠️ PDF Error"
 
-# --- 2. واجهة المستخدم ---
+# --- 3. واجهة المستخدم ---
 st.title("🛡️ SEF Terminal | Ultimate Hub")
 
-# التوقيع + إخلاء المسؤولية بالعربي والإنجليزي (محاذاة لليسار)
 st.markdown("""
     <div style='text-align: left; padding-left: 50px; margin-top: -20px;'>
         <div style='color: #555; font-size: 1.1em; font-weight: bold;'>🖋️ Created By Abu Yahia</div>
         <div style='color: #cc0000; font-size: 0.85em; margin-top: 5px; line-height: 1.4;'>
-            ⚠️ <b>إخلاء مسؤولية:</b> هذا التطبيق للأغراض التعليمية فقط ولا يعتبر نصيحة مالية أو توصية بالشراء أو البيع.<br>
-            ⚠️ <b>Disclaimer:</b> Educational purposes only. Not financial advice or a recommendation to buy/sell.
+            ⚠️ <b>إخلاء مسؤولية:</b> هذا التطبيق للأغراض التعليمية فقط ولا يعتبر نصيحة مالية.<br>
+            ⚠️ <b>Disclaimer:</b> Educational purposes only. Not financial advice.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-# السايدبار لإعدادات المحفظة
 balance = st.sidebar.number_input("Portfolio Balance", value=100000)
-risk_pct = st.sidebar.slider("Risk per Trade (%)", 0.5, 5.0, 1.0)
+risk_pct_input = st.sidebar.slider("Risk per Trade (%)", 0.5, 5.0, 1.0)
 
-# إدارة الذاكرة التفاعلية للقيم
 if 'p_val' not in st.session_state: st.session_state['p_val'] = 33.90
 if 'a_val' not in st.session_state: st.session_state['a_val'] = 31.72
 if 't_val' not in st.session_state: st.session_state['t_val'] = 39.36
 
 st.markdown("---")
 
-# صف المدخلات والأزرار التفاعلية
 c1, c2, c3, c4, c5, c6 = st.columns([1.5, 1.2, 1.2, 1.2, 1.2, 1.5])
 
 with c1:
@@ -93,10 +95,14 @@ with c6:
 
 st.markdown("---")
 
-# --- 3. عرض التحليل الذكي ---
+# --- 4. عرض التحليل الذكي ---
 if analyze_trigger:
     risk_per_share = abs(p_in - a_in)
-    risk_cash = balance * (risk_pct / 100)
+    risk_cash = balance * (risk_pct_input / 100)
+    
+    # حساب النسب المئوية
+    dist_to_sl_pct = (risk_per_share / p_in) * 100 if p_in != 0 else 0
+    dist_to_t_pct = ((t_in - p_in) / p_in) * 100 if p_in != 0 else 0
     
     if risk_per_share > 0:
         rr = (t_in - p_in) / risk_per_share
@@ -124,6 +130,8 @@ Ticker: {ticker} | Price: {p_in}
 2. METRICS:
 - R:R Ratio: 1:{round(rr, 2)}
 - Quantity: {qty} Shares | Risk: {round(risk_cash, 2)}
+- Risk to SL: -{round(dist_to_sl_pct, 2)}%
+- Reward to Target: +{round(dist_to_t_pct, 2)}%
 
 RESULT: {rr_advice}
 ------------------------------------

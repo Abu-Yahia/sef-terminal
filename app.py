@@ -5,15 +5,22 @@ import math
 from fpdf import FPDF
 import base64
 
-# --- 1. إعدادات الصفحة والأيقونة الاحترافية (الروبوت) ---
-# ملاحظة: تم وضع رابط الصورة التي اخترتها لتظهر كأيقونة في المتصفح وعند التثبيت
-icon_url = "https://i.ibb.co/vzR0jXJX/robot-icon.png" # تأكد أن الرابط مباشر للصورة
+# --- 1. إعدادات الصفحة المتقدمة للهوية البصرية ---
+icon_url = "https://i.ibb.co/vzR0jXJX/robot-icon.png"
 
 st.set_page_config(
     page_title="SEF Terminal Pro", 
     page_icon=icon_url, 
     layout="wide"
 )
+
+# كود لإجبار الهاتف على إظهار الأيقونة الخاصة بك بدلاً من شعار Streamlit
+st.markdown(f"""
+    <head>
+        <link rel="apple-touch-icon" href="{icon_url}">
+        <link rel="icon" href="{icon_url}">
+    </head>
+    """, unsafe_allow_html=True)
 
 # --- 2. الدوال الأساسية ---
 def fetch_live_data(ticker_symbol):
@@ -55,21 +62,24 @@ st.markdown("""
     <div style='text-align: left; padding-left: 50px; margin-top: -20px;'>
         <div style='color: #555; font-size: 1.1em; font-weight: bold;'>🖋️ Created By Abu Yahia</div>
         <div style='color: #cc0000; font-size: 0.85em; margin-top: 5px; line-height: 1.4;'>
-            ⚠️ <b>إخلاء مسؤولية:</b> هذا التطبيق للأغراض التعليمية فقط ولا يعتبر نصيحة مالية.<br>
-            ⚠️ <b>Disclaimer:</b> Educational purposes only. Not financial advice.
+            ⚠️ <b>إخلاء مسؤولية:</b> هذا التطبيق للأغراض التعليمية فقط ولا يعتبر نصيحة مالية أو توصية بالشراء أو البيع.<br>
+            ⚠️ <b>Disclaimer:</b> Educational purposes only. Not financial advice or a recommendation to buy/sell.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
+# السايدبار لإعدادات المحفظة
 balance = st.sidebar.number_input("Portfolio Balance", value=100000)
 risk_pct_input = st.sidebar.slider("Risk per Trade (%)", 0.5, 5.0, 1.0)
 
+# إدارة الذاكرة التفاعلية للقيم
 if 'p_val' not in st.session_state: st.session_state['p_val'] = 33.90
 if 'a_val' not in st.session_state: st.session_state['a_val'] = 31.72
 if 't_val' not in st.session_state: st.session_state['t_val'] = 39.36
 
 st.markdown("---")
 
+# صف المدخلات والأزرار التفاعلية
 c1, c2, c3, c4, c5, c6 = st.columns([1.5, 1.2, 1.2, 1.2, 1.2, 1.5])
 
 with c1:
@@ -100,7 +110,7 @@ if analyze_trigger:
     risk_per_share = abs(p_in - a_in)
     risk_cash = balance * (risk_pct_input / 100)
     
-    # حساب النسب المئوية
+    # حساب النسب المئوية (الإضافة المطلوبة)
     dist_to_sl_pct = (risk_per_share / p_in) * 100 if p_in != 0 else 0
     dist_to_t_pct = ((t_in - p_in) / p_in) * 100 if p_in != 0 else 0
     
@@ -148,6 +158,7 @@ DISCLAIMER: For educational purposes only.
         c_data['Anchor'] = a_in
         c_data['Target'] = t_in
         c_data['EMA_200'] = c_data['Close'].ewm(span=200, adjust=False).mean()
-        st.line_chart(c_data)
+        # عرض الشارت بشكل متجاوب مع الجوال
+        st.line_chart(c_data, use_container_width=True)
     
     if rr >= 3: st.balloons()

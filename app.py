@@ -9,7 +9,7 @@ import base64
 icon_url = "https://i.ibb.co/vzR0jXJX/robot-icon.png?v=100"
 
 st.set_page_config(
-    page_title="SEF Terminal Pro", 
+    page_title="SEF Pro v2", 
     page_icon=icon_url, 
     layout="wide"
 )
@@ -158,3 +158,4 @@ DISCLAIMER: For educational purposes only.
         st.line_chart(c_data, use_container_width=True)
     
     if rr >= 3: st.balloons()
+

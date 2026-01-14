@@ -9,37 +9,31 @@ import base64
 icon_url = "https://i.ibb.co/vzR0jXJX/robot-icon.png"
 st.set_page_config(page_title="SEF Terminal Pro", page_icon=icon_url, layout="wide")
 
-# --- 2. دالة جلب جميع أسهم تاسي آلياً ---
-@st.cache_data
-def get_all_tasi_stocks():
-    # قائمة بجميع رموز تاسي الشهيرة كاحتياط، ويمكنك توسيعها أو جلبها من ملف CSV
-    # هنا وضعت لك أهم الشركات، وبإمكانك البحث عن أي سهم آخر يدوياً
-    data = {
-        "الراجحي (1120)": "1120.SR", "أرامكو (2222)": "2222.SR", "الأهلي (1180)": "1180.SR",
-        "الإنماء (1150)": "1150.SR", "اس تي سي (7010)": "7010.SR", "سابك (2010)": "2010.SR",
-        "معادن (1211)": "1211.SR", "سليمان الحبيب (4013)": "4013.SR", "المستشفى الألماني (4009)": "4009.SR",
-        "سابك للمغذيات (2020)": "2020.SR", "ينساب (2290)": "2290.SR", "سبكيم (2310)": "2310.SR",
-        "المراعي (2280)": "2280.SR", "جرير (4190)": "4190.SR", "إكسترا (4003)": "4003.SR",
-        "البلاد (1140)": "1140.SR", "الجزيرة (1020)": "1020.SR", "الاستثمار (1030)": "1030.SR",
-        "بنك الرياض (1010)": "1010.SR", "مجموعة تداول (1111)": "1111.SR", "بدجت (4260)": "4260.SR",
-        "البحري (4030)": "4030.SR", "بوبا (8010)": "8010.SR", "الغاز (2080)": "2080.SR",
-        "دار الأركان (4300)": "4300.SR", "جبل عمر (4250)": "4250.SR", "صافولا (2050)": "2050.SR"
-    }
-    return data
-
-tasi_dict = get_all_tasi_stocks()
-
-# --- 3. الدوال الأساسية ---
-def fetch_live_data(ticker_symbol):
+# --- 2. الدوال الأساسية ---
+def get_ticker_info(symbol):
+    """جلب اسم السهم وبياناته الحية بناءً على الرمز أو البحث"""
     try:
-        stock = yf.Ticker(ticker_symbol)
+        # إذا أدخل المستخدم رقماً فقط (مثل 2020) نضيف له .SR
+        if symbol.isdigit():
+            full_symbol = f"{symbol}.SR"
+        elif not symbol.endswith(".SR") and not symbol.isalpha():
+            full_symbol = f"{symbol}.SR"
+        else:
+            full_symbol = symbol.upper()
+            
+        stock = yf.Ticker(full_symbol)
+        # محاولة جلب الاسم الرسمي من الشركة
+        name = stock.info.get('longName', full_symbol)
         df = stock.history(period="1mo")
-        if df.empty: return None, None, None
+        
+        if df.empty: return None, None, None, None
+        
         current_p = round(df['Close'].iloc[-1], 2)
         auto_anchor = round(df['Low'].min(), 2)
         auto_target = round(df['High'].max(), 2)
-        return current_p, auto_anchor, auto_target
-    except: return None, None, None
+        return current_p, auto_anchor, auto_target, name
+    except:
+        return None, None, None, None
 
 def generate_pdf_link(content, ticker):
     try:
@@ -47,28 +41,24 @@ def generate_pdf_link(content, ticker):
         pdf.add_page()
         pdf.set_font("Arial", 'B', 16)
         pdf.cell(200, 10, txt="SEF STRATEGIC ANALYSIS", ln=True, align='C')
-        pdf.ln(5)
-        pdf.set_font("Arial", size=10)
-        pdf.cell(200, 7, txt="Created By Abu Yahia", ln=True, align='L')
-        pdf.set_text_color(200, 0, 0)
-        pdf.cell(200, 7, txt="Disclaimer: Educational purposes only.", ln=True, align='L')
-        pdf.set_text_color(0, 0, 0)
         pdf.ln(10)
+        pdf.set_font("Arial", size=11)
         clean_text = content.encode('ascii', 'ignore').decode('ascii')
         for line in clean_text.split('\n'):
             pdf.cell(0, 8, txt=line, ln=True)
         pdf_output = pdf.output(dest='S').encode('latin-1')
         b64 = base64.b64encode(pdf_output).decode()
-        return f'<a href="data:application/octet-stream;base64,{b64}" download="SEF_{ticker}_Report.pdf" style="background-color: #ff4b4b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; margin-top: 10px;">📥 Download PDF Report</a>'
+        return f'<a href="data:application/octet-stream;base64,{b64}" download="SEF_{ticker}_Report.pdf" style="background-color: #ff4b4b; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">📥 Download PDF Report</a>'
     except: return "⚠️ PDF Error"
 
-# --- 4. واجهة المستخدم ---
-st.title("🛡️ SEF Terminal | All TASI Stocks")
+# --- 3. واجهة المستخدم ---
+st.title("🛡️ SEF Terminal | Universal Search")
 
-# إدارة الذاكرة للحفاظ على القيم عند التحديث
+# إدارة الذاكرة
 if 'p_val' not in st.session_state: st.session_state['p_val'] = 0.0
 if 'a_val' not in st.session_state: st.session_state['a_val'] = 0.0
 if 't_val' not in st.session_state: st.session_state['t_val'] = 0.0
+if 'stock_name' not in st.session_state: st.session_state['stock_name'] = "No Stock Selected"
 
 balance = st.sidebar.number_input("Portfolio Balance", value=100000)
 risk_pct_input = st.sidebar.slider("Risk per Trade (%)", 0.5, 5.0, 1.0)
@@ -76,12 +66,10 @@ risk_pct_input = st.sidebar.slider("Risk per Trade (%)", 0.5, 5.0, 1.0)
 st.markdown("---")
 
 # صف المدخلات
-c1, c2, c3, c4, c5, c6 = st.columns([2.0, 1.1, 1.1, 1.1, 1.0, 1.2])
+c1, c2, c3, c4, c5, c6 = st.columns([1.8, 1.1, 1.1, 1.1, 1.0, 1.2])
 
 with c1:
-    # قائمة منسدلة مع بحث (تظهر الاسم والرمز)
-    search_query = st.selectbox("🔍 Search TASI Stocks", options=list(tasi_dict.keys()))
-    ticker = tasi_dict[search_query]
+    user_input = st.text_input("🔍 Enter Ticker (e.g., 2020 or 4335)", "4009").strip()
 
 with c2: p_in = st.number_input("Price", value=float(st.session_state['p_val']), step=0.01)
 with c3: a_in = st.number_input("Anchor", value=float(st.session_state['a_val']), step=0.01)
@@ -90,18 +78,23 @@ with c4: t_in = st.number_input("Target", value=float(st.session_state['t_val'])
 with c5:
     st.write("##")
     if st.button("🛰️ Radar", use_container_width=True):
-        p, a, t = fetch_live_data(ticker)
+        p, a, t, name = get_ticker_info(user_input)
         if p:
-            st.session_state.update({'p_val': p, 'a_val': a, 't_val': t})
+            st.session_state.update({'p_val': p, 'a_val': a, 't_val': t, 'stock_name': name})
             st.rerun()
+        else:
+            st.error("Symbol not found. Try numbers like 2020")
 
 with c6:
     st.write("##")
     analyze_trigger = st.button("📊 Analyze", use_container_width=True)
 
+# عرض اسم السهم المختار حالياً
+st.info(f"📍 Active Analysis: **{st.session_state['stock_name']}**")
+
 st.markdown("---")
 
-# --- 5. التحليل والتقارير ---
+# --- 4. التحليل والتقارير ---
 if analyze_trigger:
     risk_per_share = abs(p_in - a_in)
     risk_cash = balance * (risk_pct_input / 100)
@@ -119,27 +112,27 @@ if analyze_trigger:
     m4.metric("Risk Cash", round(risk_cash, 2))
 
     full_report = f"""
-SEF ANALYSIS REPORT | Abu Yahia
+SEF STRATEGIC REPORT | Abu Yahia
 ------------------------------------
-Stock Selected: {search_query}
-Ticker Symbol: {ticker}
+Company: {st.session_state['stock_name']}
+Ticker: {user_input}
 ------------------------------------
 1. LEVELS:
 - Entry Price: {p_in}
 - Anchor (SL): {a_in}
 - Target Price: {t_in}
 
-2. STRATEGIC METRICS:
+2. RISK METRICS:
 - R:R Ratio: 1:{round(rr, 2)}
 - Quantity: {qty} Shares
 - Cash at Risk: {round(risk_cash, 2)}
 - Distance to SL: -{round(dist_to_sl_pct, 2)}%
-- Potential Reward: +{round(dist_to_t_pct, 2)}%
+- Target Reward: +{round(dist_to_t_pct, 2)}%
 ------------------------------------
     """
-    st.markdown("### 📄 SEF Structural Analysis")
     st.code(full_report)
-    st.markdown(generate_pdf_link(full_report, ticker), unsafe_allow_html=True)
+    st.markdown(generate_pdf_link(full_report, user_input), unsafe_allow_html=True)
     
-    # الشارت التفاعلي
-    st.line_chart(yf.Ticker(ticker).history(period="1y")['Close'], use_container_width=True)
+    # جلب الرمز الصحيح للرسم البياني
+    graph_ticker = f"{user_input}.SR" if user_input.isdigit() else user_input
+    st.line_chart(yf.Ticker(graph_ticker).history(period="1y")['Close'], use_container_width=True)

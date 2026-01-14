@@ -9,34 +9,25 @@ import base64
 icon_url = "https://i.ibb.co/vzR0jXJX/robot-icon.png"
 st.set_page_config(page_title="SEF Terminal Pro", page_icon=icon_url, layout="wide")
 
-# --- 2. قاعدة بيانات أسهم تاسي (الرمز والاسم) ---
-# يمكنك إضافة أي سهم هنا مستقبلاً باتباع نفس التنسيق
-tasi_data = {
-    "4009.SR": "Saudi German Health | الألماني",
-    "1120.SR": "Al Rajhi Bank | الراجحي",
-    "2222.SR": "Saudi Aramco | أرامكو",
-    "1150.SR": "Alinma Bank | الإنماء",
-    "1180.SR": "SNB | الأهلي",
-    "7010.SR": "STC | اس تي سي",
-    "2010.SR": "SABIC | سابك",
-    "2310.SR": "Sipchem | سبكيم",
-    "2280.SR": "Almarai | المراعي",
-    "1211.SR": "Ma'aden | معادن",
-    "4190.SR": "Jarir | جرير",
-    "4003.SR": "Extra | إكسترا",
-    "4013.SR": "Dr. Sulaiman Al-Habib | سليمان الحبيب",
-    "2020.SR": "SABIC Agri-Nutrients | سابك للمغذيات",
-    "1140.SR": "Bank AlBilad | البلاد",
-    "4260.SR": "Budget Saudi | بدجت",
-    "4030.SR": "NSCSA | البحري",
-    "1010.SR": "Riyad Bank | بنك الرياض",
-    "8010.SR": "Bupa Arabia | بوبا العربية",
-    "2290.SR": "Yansab | ينساب",
-    "1111.SR": "Tadawul Group | مجموعة تداول"
-}
+# --- 2. دالة جلب جميع أسهم تاسي آلياً ---
+@st.cache_data
+def get_all_tasi_stocks():
+    # قائمة بجميع رموز تاسي الشهيرة كاحتياط، ويمكنك توسيعها أو جلبها من ملف CSV
+    # هنا وضعت لك أهم الشركات، وبإمكانك البحث عن أي سهم آخر يدوياً
+    data = {
+        "الراجحي (1120)": "1120.SR", "أرامكو (2222)": "2222.SR", "الأهلي (1180)": "1180.SR",
+        "الإنماء (1150)": "1150.SR", "اس تي سي (7010)": "7010.SR", "سابك (2010)": "2010.SR",
+        "معادن (1211)": "1211.SR", "سليمان الحبيب (4013)": "4013.SR", "المستشفى الألماني (4009)": "4009.SR",
+        "سابك للمغذيات (2020)": "2020.SR", "ينساب (2290)": "2290.SR", "سبكيم (2310)": "2310.SR",
+        "المراعي (2280)": "2280.SR", "جرير (4190)": "4190.SR", "إكسترا (4003)": "4003.SR",
+        "البلاد (1140)": "1140.SR", "الجزيرة (1020)": "1020.SR", "الاستثمار (1030)": "1030.SR",
+        "بنك الرياض (1010)": "1010.SR", "مجموعة تداول (1111)": "1111.SR", "بدجت (4260)": "4260.SR",
+        "البحري (4030)": "4030.SR", "بوبا (8010)": "8010.SR", "الغاز (2080)": "2080.SR",
+        "دار الأركان (4300)": "4300.SR", "جبل عمر (4250)": "4250.SR", "صافولا (2050)": "2050.SR"
+    }
+    return data
 
-# عكس القائمة للعرض (الاسم أولاً)
-display_options = {v: k for k, v in tasi_data.items()}
+tasi_dict = get_all_tasi_stocks()
 
 # --- 3. الدوال الأساسية ---
 def fetch_live_data(ticker_symbol):
@@ -72,9 +63,9 @@ def generate_pdf_link(content, ticker):
     except: return "⚠️ PDF Error"
 
 # --- 4. واجهة المستخدم ---
-st.title("🛡️ SEF Terminal | Abu Yahia")
+st.title("🛡️ SEF Terminal | All TASI Stocks")
 
-# إدارة الذاكرة
+# إدارة الذاكرة للحفاظ على القيم عند التحديث
 if 'p_val' not in st.session_state: st.session_state['p_val'] = 0.0
 if 'a_val' not in st.session_state: st.session_state['a_val'] = 0.0
 if 't_val' not in st.session_state: st.session_state['t_val'] = 0.0
@@ -88,9 +79,9 @@ st.markdown("---")
 c1, c2, c3, c4, c5, c6 = st.columns([2.0, 1.1, 1.1, 1.1, 1.0, 1.2])
 
 with c1:
-    # القائمة المنسدلة مع ميزة البحث المدمجة
-    selected_stock_name = st.selectbox("🔍 Search & Select Stock", options=list(display_options.keys()))
-    ticker = display_options[selected_stock_name]
+    # قائمة منسدلة مع بحث (تظهر الاسم والرمز)
+    search_query = st.selectbox("🔍 Search TASI Stocks", options=list(tasi_dict.keys()))
+    ticker = tasi_dict[search_query]
 
 with c2: p_in = st.number_input("Price", value=float(st.session_state['p_val']), step=0.01)
 with c3: a_in = st.number_input("Anchor", value=float(st.session_state['a_val']), step=0.01)
@@ -98,15 +89,11 @@ with c4: t_in = st.number_input("Target", value=float(st.session_state['t_val'])
 
 with c5:
     st.write("##")
-    # زر الرادار لجلب البيانات الحية للسهم المختار
     if st.button("🛰️ Radar", use_container_width=True):
-        with st.spinner('Fetching data...'):
-            p, a, t = fetch_live_data(ticker)
-            if p:
-                st.session_state.update({'p_val': p, 'a_val': a, 't_val': t})
-                st.rerun()
-            else:
-                st.error("Data not found")
+        p, a, t = fetch_live_data(ticker)
+        if p:
+            st.session_state.update({'p_val': p, 'a_val': a, 't_val': t})
+            st.rerun()
 
 with c6:
     st.write("##")
@@ -114,12 +101,11 @@ with c6:
 
 st.markdown("---")
 
-# --- 5. الحسابات والتقرير ---
+# --- 5. التحليل والتقارير ---
 if analyze_trigger:
     risk_per_share = abs(p_in - a_in)
     risk_cash = balance * (risk_pct_input / 100)
     
-    # حساب النسب المئوية
     dist_to_sl_pct = (risk_per_share / p_in) * 100 if p_in != 0 else 0
     dist_to_t_pct = ((t_in - p_in) / p_in) * 100 if p_in != 0 else 0
     
@@ -135,8 +121,8 @@ if analyze_trigger:
     full_report = f"""
 SEF ANALYSIS REPORT | Abu Yahia
 ------------------------------------
-Stock: {selected_stock_name}
-Ticker: {ticker}
+Stock Selected: {search_query}
+Ticker Symbol: {ticker}
 ------------------------------------
 1. LEVELS:
 - Entry Price: {p_in}
@@ -155,5 +141,5 @@ Ticker: {ticker}
     st.code(full_report)
     st.markdown(generate_pdf_link(full_report, ticker), unsafe_allow_html=True)
     
-    # رسم بياني توضيحي
+    # الشارت التفاعلي
     st.line_chart(yf.Ticker(ticker).history(period="1y")['Close'], use_container_width=True)

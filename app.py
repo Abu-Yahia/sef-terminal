@@ -1,9 +1,12 @@
 import streamlit as st
-import time
+import yfinance as yf
+import pandas as pd
+import math
+from fpdf import FPDF
+import base64
 
-# --- 1. إعدادات الصفحة المتقدمة مع كسر الكاش ---
-# أضفنا رقم عشوائي (v=1) في نهاية الرابط لإجبار المتصفح على تحميل الصورة من جديد
-icon_url = "https://i.ibb.co/vzR0jXJX/robot-icon.png?v=1" 
+# --- 1. إعدادات الصفحة والأيقونة (السطور 20 و21 مدمجة هنا) ---
+icon_url = "https://i.ibb.co/vzR0jXJX/robot-icon.png?v=100"
 
 st.set_page_config(
     page_title="SEF Terminal Pro", 
@@ -11,24 +14,11 @@ st.set_page_config(
     layout="wide"
 )
 
-# كود حقن الهوية البصرية بشكل قسري
+# حقن الكود لإجبار الجوال على إظهار الأيقونة (PWA Injection)
 st.markdown(f"""
-    <style>
-    /* كود إضافي لإخفاء أي شعارات افتراضية */
-    [data-testid="stSidebarNav"] {{
-        background-image: url({icon_url});
-        background-repeat: no-repeat;
-        padding-top: 80px;
-        background-position: 20px 20px;
-        background-size: 50px 50px;
-    }}
-    </style>
     <head>
         <link rel="apple-touch-icon" href="{icon_url}">
         <link rel="icon" type="image/png" href="{icon_url}">
-    </head>
-    """, unsafe_allow_html=True)
-        <link rel="icon" href="{icon_url}">
     </head>
     """, unsafe_allow_html=True)
 
@@ -72,24 +62,21 @@ st.markdown("""
     <div style='text-align: left; padding-left: 50px; margin-top: -20px;'>
         <div style='color: #555; font-size: 1.1em; font-weight: bold;'>🖋️ Created By Abu Yahia</div>
         <div style='color: #cc0000; font-size: 0.85em; margin-top: 5px; line-height: 1.4;'>
-            ⚠️ <b>إخلاء مسؤولية:</b> هذا التطبيق للأغراض التعليمية فقط ولا يعتبر نصيحة مالية أو توصية بالشراء أو البيع.<br>
-            ⚠️ <b>Disclaimer:</b> Educational purposes only. Not financial advice or a recommendation to buy/sell.
+            ⚠️ <b>إخلاء مسؤولية:</b> هذا التطبيق للأغراض التعليمية فقط ولا يعتبر نصيحة مالية.<br>
+            ⚠️ <b>Disclaimer:</b> Educational purposes only. Not financial advice.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-# السايدبار لإعدادات المحفظة
 balance = st.sidebar.number_input("Portfolio Balance", value=100000)
 risk_pct_input = st.sidebar.slider("Risk per Trade (%)", 0.5, 5.0, 1.0)
 
-# إدارة الذاكرة التفاعلية للقيم
 if 'p_val' not in st.session_state: st.session_state['p_val'] = 33.90
 if 'a_val' not in st.session_state: st.session_state['a_val'] = 31.72
 if 't_val' not in st.session_state: st.session_state['t_val'] = 39.36
 
 st.markdown("---")
 
-# صف المدخلات والأزرار التفاعلية
 c1, c2, c3, c4, c5, c6 = st.columns([1.5, 1.2, 1.2, 1.2, 1.2, 1.5])
 
 with c1:
@@ -115,12 +102,12 @@ with c6:
 
 st.markdown("---")
 
-# --- 4. عرض التحليل الذكي ---
+# --- 4. عرض التحليل الذكي (النسب المئوية مدمجة هنا) ---
 if analyze_trigger:
     risk_per_share = abs(p_in - a_in)
     risk_cash = balance * (risk_pct_input / 100)
     
-    # حساب النسب المئوية (الإضافة المطلوبة)
+    # حساب النسب المئوية للمخاطرة والهدف
     dist_to_sl_pct = (risk_per_share / p_in) * 100 if p_in != 0 else 0
     dist_to_t_pct = ((t_in - p_in) / p_in) * 100 if p_in != 0 else 0
     
@@ -168,8 +155,6 @@ DISCLAIMER: For educational purposes only.
         c_data['Anchor'] = a_in
         c_data['Target'] = t_in
         c_data['EMA_200'] = c_data['Close'].ewm(span=200, adjust=False).mean()
-        # عرض الشارت بشكل متجاوب مع الجوال
         st.line_chart(c_data, use_container_width=True)
     
     if rr >= 3: st.balloons()
-

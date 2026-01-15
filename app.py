@@ -32,8 +32,8 @@ if 'price' not in st.session_state:
     })
 
 # --- 4. Main UI ---
-st.title("🛡️ SEF Terminal Pro | Visual Technical Edition")
-st.write(f"Active Stocks: **{len(options)}** | User: Abu Yahia")
+st.title("🛡️ SEF Terminal Pro | Abu Yahia Edition")
+st.write(f"Active Stocks: **{len(options)}**")
 
 st.markdown("---")
 
@@ -75,16 +75,19 @@ with c6:
     st.write("##")
     analyze_btn = st.button("📊 ANALYZE", use_container_width=True)
 
-# --- 6. SMA Metrics Display ---
+# --- 6. SMA Metrics Display (Fixed Colors) ---
 if st.session_state['ready']:
     st.subheader("📈 Technical Indicators")
     m_cols = st.columns(3)
     ma_data = [("SMA 50", st.session_state['sma50']), ("SMA 100", st.session_state['sma100']), ("SMA 200", st.session_state['sma200'])]
+    
     for i, (label, val) in enumerate(ma_data):
         diff = st.session_state['price'] - val
-        m_cols[i].metric(label, f"{val:.2f}", delta=f"{diff:.2f} SAR", delta_color="normal" if diff >= 0 else "inverse")
+        # التحقق من اللون: إذا الفرق سالب، اللون أحمر (inverse)، إذا موجب أخضر (normal)
+        ma_color = "inverse" if diff < 0 else "normal"
+        m_cols[i].metric(label, f"{val:.2f}", delta=f"{diff:.2f} SAR", delta_color=ma_color)
 
-# --- 7. Analysis & Visual Challenge ---
+# --- 7. Analysis & Enhanced Chart ---
 if analyze_btn:
     risk_amt = abs(p_in - s_in)
     if risk_amt > 0:
@@ -99,16 +102,18 @@ if analyze_btn:
         res_cols[1].metric("Stop %", f"-{round((risk_amt/p_in)*100, 2)}%")
         res_cols[2].metric("R:R Ratio", f"1:{round((t_in - p_in) / risk_amt, 2)}")
 
-        # --- Plotting Price + MAs ---
-        st.subheader("Price & Moving Averages Chart")
+        # --- Chart with Support Line ---
+        st.subheader("Chart: Price, MAs & Previous Support")
         chart_raw = yf.download(f"{symbol}.SR", period="1y", progress=False)
         if isinstance(chart_raw.columns, pd.MultiIndex): chart_raw.columns = chart_raw.columns.get_level_values(0)
         
-        # Prepare Chart Data
         plot_df = chart_raw[['Close']].copy()
         plot_df['SMA 50'] = plot_df['Close'].rolling(50).mean()
         plot_df['SMA 100'] = plot_df['Close'].rolling(100).mean()
         plot_df['SMA 200'] = plot_df['Close'].rolling(200).mean()
         
-        # Display the multi-line chart
+        # إضافة خط الدعم السابق (أدنى سعر في شهر) كخط ثابت على الشارت
+        plot_df['Prev_Support'] = st.session_state['stop']
+        
         st.line_chart(plot_df)
+        st.caption(f"Note: The straight line represents 'Previous Support' at {st.session_state['stop']:.2f} SAR")

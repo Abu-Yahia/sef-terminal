@@ -9,32 +9,32 @@ import base64
 icon_url = "https://i.ibb.co/vzR0jXJX/robot-icon.png"
 st.set_page_config(page_title="SEF Terminal Pro", page_icon=icon_url, layout="wide")
 
-# --- 2. تحميل البيانات من ملفك (TASI) ---
+# --- 2. دالة جلب البيانات من ملفك المرفوع ---
 @st.cache_data
-def load_tasi_data():
+def load_full_tasi_list():
+    file_name = "TASI.xlsx - Market Watch Today-2025-10-27.csv"
     try:
-        # قراءة الملف الذي رفعته (CSV المستخرج من XLSX)
-        df = pd.read_csv("TASI.xlsx - Market Watch Today-2025-10-27.csv", skiprows=4)
-        df.columns = ['Ticker', 'Name_En', 'Name_Ar', 'Sector']
-        # تنظيف الرموز
-        df['Ticker'] = df['Ticker'].astype(str).str.split('.').str[0]
-        # تجهيز قائمة العرض
-        df['Display'] = df['Name_Ar'] + " | " + df['Ticker'] + " (" + df['Sector'] + ")"
-        mapping = dict(zip(df['Display'], df['Ticker']))
-        return list(mapping.keys()), mapping
-    except:
-        # قائمة طوارئ في حال لم يجد الكود الملف (تضم دراية والراجحي والقياديات)
-        emergency_data = {
-            "الراجحي | 1120 (Banks)": "1120",
-            "أرامكو | 2222 (Energy)": "2222",
-            "دراية ريت | 4339 (REITs)": "4339",
-            "سابك للمغذيات | 2020 (Materials)": "2020",
-            "الإنماء | 1150 (Banks)": "1150",
-            "سليمان الحبيب | 4013 (Health)": "4013"
-        }
-        return list(emergency_data.keys()), emergency_data
+        # قراءة الملف وتخطي الأسطر التعريفية للوصول للرأس (Header)
+        df = pd.read_csv(file_name, skiprows=4)
+        
+        # تنظيف البيانات: إزالة الأسطر الفارغة واختيار الأعمدة المطلوبة
+        df = df.dropna(subset=[df.columns[0], df.columns[2]])
+        
+        # بناء قائمة البحث: "الاسم العربي | الرمز"
+        # العمود 0 هو الرمز، والعمود 2 هو الاسم العربي
+        df['Display'] = df.iloc[:, 2].astype(str) + " | " + df.iloc[:, 0].astype(str).str.split('.').str[0]
+        
+        # إنشاء قاموس لربط العرض بالرمز البرمجي
+        mapping = dict(zip(df['Display'], df.iloc[:, 0].astype(str).str.split('.').str[0]))
+        
+        # ترتيب القائمة أبجدياً
+        sorted_options = sorted(list(mapping.keys()))
+        return sorted_options, mapping
+    except Exception as e:
+        st.error(f"⚠️ لم يتم العثور على ملف الأسهم أو التنسيق غير صحيح: {e}")
+        return [], {}
 
-options, tasi_mapping = load_tasi_data()
+options, tasi_mapping = load_full_tasi_list()
 
 # --- 3. الدوال الأساسية ---
 def fetch_live_data(ticker_symbol):
@@ -46,40 +46,28 @@ def fetch_live_data(ticker_symbol):
         return round(df['Close'].iloc[-1], 2), round(df['Low'].min(), 2), round(df['High'].max(), 2)
     except: return None, None, None
 
-def generate_pdf(content, ticker):
-    try:
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", 'B', 14)
-        pdf.cell(200, 10, txt="SEF STRATEGIC ANALYSIS - ABU YAHIA", ln=True, align='C')
-        pdf.ln(10)
-        pdf.set_font("Arial", size=10)
-        for line in content.encode('ascii', 'ignore').decode('ascii').split('\n'):
-            pdf.cell(0, 7, txt=line, ln=True)
-        pdf_output = pdf.output(dest='S').encode('latin-1')
-        b64 = base64.b64encode(pdf_output).decode()
-        return f'<a href="data:application/octet-stream;base64,{b64}" download="SEF_{ticker}.pdf" style="background-color: #ff4b4b; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">📥 Download PDF Report</a>'
-    except: return ""
-
 # --- 4. واجهة المستخدم ---
-st.title("🛡️ SEF Terminal Pro | TASI Explorer")
-st.write("🖋️ **Created By Abu Yahia** | النسخة الشاملة")
+st.title("🛡️ SEF Terminal Pro | الإصدار الشامل")
+st.write(f"🖋️ **المطور: أبو يحيى** | تم تحميل {len(options)} سهم من القائمة")
 
 if 'p_val' not in st.session_state: st.session_state.update({'p_val': 0.0, 'a_val': 0.0, 't_val': 0.0})
 
 balance = st.sidebar.number_input("Portfolio Balance (المحفظة)", value=100000)
-risk_pct_input = st.sidebar.slider("Risk per Trade (%) نسبة المخاطرة", 0.5, 5.0, 1.0)
+risk_pct_input = st.sidebar.slider("Risk (%) نسبة المخاطرة", 0.5, 5.0, 1.0)
 
 st.markdown("---")
 
-c1, c2, c3, c4, c5, c6 = st.columns([2.2, 1.1, 1.1, 1.1, 1.0, 1.2])
+c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1.0, 1.0, 1.0, 0.8, 1.0])
 
 with c1:
-    selected_stock = st.selectbox("🔍 Search Stocks (Name or Code)", options=options)
-    ticker_code = tasi_mapping[selected_stock]
+    if options:
+        selected_stock = st.selectbox("🔍 ابحث عن السهم (دراية، الراجحي، 4339...)", options=options)
+        ticker_code = tasi_mapping[selected_stock]
+    else:
+        ticker_code = st.text_input("أدخل الرمز يدوياً (مثال: 2222)", "2222")
 
 with c2: p_in = st.number_input("Price", value=float(st.session_state['p_val']), step=0.01)
-with c3: a_in = st.number_input("Anchor (SL)", value=float(st.session_state['a_val']), step=0.01)
+with c3: a_in = st.number_input("Anchor", value=float(st.session_state['a_val']), step=0.01)
 with c4: t_in = st.number_input("Target", value=float(st.session_state['t_val']), step=0.01)
 
 with c5:
@@ -94,39 +82,23 @@ with c6:
     st.write("##")
     analyze_trigger = st.button("📊 Analyze", use_container_width=True)
 
-st.markdown("---")
-
-# --- 5. النتائج والتحليل ---
+# --- 5. الحسابات والنتائج ---
 if analyze_trigger:
     risk_per_share = abs(p_in - a_in)
     risk_cash = balance * (risk_pct_input / 100)
     
-    dist_to_sl_pct = (risk_per_share / p_in) * 100 if p_in != 0 else 0
-    dist_to_t_pct = ((t_in - p_in) / p_in) * 100 if p_in != 0 else 0
-    
-    rr = (t_in - p_in) / risk_per_share if risk_per_share > 0 else 0
-    qty = math.floor(risk_cash / risk_per_share) if risk_per_share > 0 else 0
+    if risk_per_share > 0:
+        dist_sl = (risk_per_share / p_in) * 100
+        dist_tp = ((t_in - p_in) / p_in) * 100
+        rr = (t_in - p_in) / risk_per_share
+        qty = math.floor(risk_cash / risk_per_share)
 
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Live Price", p_in)
-    m2.metric("R:R Ratio", f"1:{round(rr, 2)}")
-    m3.metric("Shares", qty)
-    m4.metric("Risk Cash", round(risk_cash, 2))
+        st.success(f"📈 تحليل: {selected_stock}")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("الكمية", f"{qty} سهم")
+        m2.metric("نسبة الوقف", f"-{round(dist_sl, 2)}%")
+        m3.metric("نسبة الهدف", f"+{round(dist_tp, 2)}%")
+        m4.metric("المخاطرة ريال", f"{round(risk_cash, 1)}")
 
-    report = f"""
-SEF STRATEGIC REPORT
-------------------------------------
-Asset: {selected_stock}
-------------------------------------
-- Entry Price: {p_in}
-- Anchor (SL): {a_in}
-- Target Price: {t_in}
-- Risk to SL: -{round(dist_to_sl_pct, 2)}%
-- Potential Reward: +{round(dist_to_t_pct, 2)}%
-- Quantity: {qty} Shares
-- Strategy R:R: 1:{round(rr, 2)}
-------------------------------------
-    """
-    st.code(report)
-    st.markdown(generate_pdf(report, ticker_code), unsafe_allow_html=True)
-    st.line_chart(yf.Ticker(f"{ticker_code}.SR").history(period="1y")['Close'], use_container_width=True)
+        st.info(f"📊 معامل العائد للمخاطرة (R:R) = 1:{round(rr, 2)}")
+        st.line_chart(yf.Ticker(f"{ticker_code}.SR").history(period="1y")['Close'])

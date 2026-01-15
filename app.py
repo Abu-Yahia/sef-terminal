@@ -31,7 +31,7 @@ if 'ready' not in st.session_state:
     })
 
 # --- 4. Main UI ---
-st.title("🛡️ SEF Terminal Pro | Abu Yahia")
+st.title("🛡️ SEF Terminal Pro | Final Benchmark")
 
 c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1, 1, 1, 0.8, 1])
 
@@ -72,13 +72,14 @@ if st.session_state['ready']:
     m_cols = st.columns(3)
     ma_list = [("SMA 50", st.session_state['sma50']), ("SMA 100", st.session_state['sma100']), ("SMA 200", st.session_state['sma200'])]
     for i, (label, val) in enumerate(ma_list):
-        diff = st.session_state['price'] - val
+        diff = p_in - val
         color = "#FF4B4B" if diff < 0 else "#09AB3B"
+        dist_pct = (diff / val) * 100
         m_cols[i].markdown(f"""
             <div style="background-color: #f8f9fb; padding: 15px; border-radius: 10px; border-left: 6px solid {color};">
                 <p style="margin:0; font-size:14px; color:#5c5c5c;">{label}</p>
                 <h3 style="margin:0; color:#31333F;">{val:.2f}</h3>
-                <p style="margin:0; font-size:16px; color:{color}; font-weight:bold;">{abs(diff):.2f} SAR</p>
+                <p style="margin:0; font-size:16px; color:{color}; font-weight:bold;">{dist_pct:+.2f}%</p>
             </div>
         """, unsafe_allow_html=True)
 
@@ -92,7 +93,7 @@ if analyze_btn or st.session_state['ready']:
     shares = math.floor((balance * (risk_pct/100)) / risk_amt) if risk_amt > 0 else 0
 
     t_cols = st.columns(4)
-    t_cols[0].metric("Live Price", f"{p_in:.2f}") # تقريب السعر لـ 2 digits
+    t_cols[0].metric("Live Price", f"{p_in:.2f}")
     t_cols[1].metric("R:R Ratio", f"1:{round(rr_ratio, 2)}")
     t_cols[2].metric("Shares", f"{shares}")
     t_cols[3].metric("Risk Cash", f"{balance * (risk_pct/100):.2f}")
@@ -100,7 +101,11 @@ if analyze_btn or st.session_state['ready']:
     st.subheader("📄 SEF Structural Analysis")
     result_status = "DANGEROUS (Avoid - Poor Reward)" if rr_ratio < 2 else "VALID (Good Risk/Reward)"
     
-    # صياغة التقرير مع إضافة المتوسطات وتقريب السعر
+    # حساب النسب المئوية للمتوسطات
+    p50 = ((p_in - st.session_state['sma50']) / st.session_state['sma50']) * 100
+    p100 = ((p_in - st.session_state['sma100']) / st.session_state['sma100']) * 100
+    p200 = ((p_in - st.session_state['sma200']) / st.session_state['sma200']) * 100
+
     report_text = f"""
     SEF STRATEGIC ANALYSIS REPORT
     Created By Abu Yahia
@@ -110,10 +115,10 @@ if analyze_btn or st.session_state['ready']:
     1. LEVELS:
     - Entry: {p_in:.2f} | Anchor (SL): {s_in:.2f} | Target: {t_in:.2f}
 
-    2. TECHNICALS (MAs):
-    - SMA 50: {st.session_state['sma50']:.2f}
-    - SMA 100: {st.session_state['sma100']:.2f}
-    - SMA 200: {st.session_state['sma200']:.2f}
+    2. TECHNICALS (MAs & Distance):
+    - SMA 50 : {st.session_state['sma50']:.2f} (Dist: {p50:+.2f}%)
+    - SMA 100: {st.session_state['sma100']:.2f} (Dist: {p100:+.2f}%)
+    - SMA 200: {st.session_state['sma200']:.2f} (Dist: {p200:+.2f}%)
 
     3. METRICS:
     - R:R Ratio: 1:{round(rr_ratio, 2)}
@@ -150,5 +155,4 @@ if analyze_btn or st.session_state['ready']:
     plot_df['SMA 50'] = plot_df['Close'].rolling(50).mean()
     plot_df['SMA 100'] = plot_df['Close'].rolling(100).mean()
     plot_df['SMA 200'] = plot_df['Close'].rolling(200).mean()
-    plot_df['StopLoss'] = s_in
     st.line_chart(plot_df)

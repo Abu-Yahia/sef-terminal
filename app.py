@@ -68,7 +68,7 @@ with c6:
     st.write("##")
     analyze_btn = st.button("📊 ANALYZE", use_container_width=True)
 
-# --- 6. Technical Indicators (THE FIX: FORCE RED FOR NEGATIVE) ---
+# --- 6. Technical Indicators (THE SECRET FIX) ---
 if st.session_state['ready']:
     st.subheader("📊 Technical Indicators")
     m_cols = st.columns(3)
@@ -81,16 +81,18 @@ if st.session_state['ready']:
     for i, (label, val) in enumerate(ma_data):
         diff = st.session_state['price'] - val
         
-        # التعديل الجوهري هنا:
-        # إذا كان السعر أقل من المتوسط (الفرق سالب)، نستخدم inverse ليظهر باللون الأحمر.
-        # إذا كان السعر أعلى من المتوسط (الفرق موجب)، نستخدم normal ليظهر باللون الأخضر.
-        color_mode = "inverse" if diff < 0 else "normal"
+        # اللعبة هنا يا أبو يحيى:
+        # إذا كان السعر تحت المتوسط (diff سالب) -> نستخدم "normal" لكن الرقم أصلاً سالب، فالمكتبة راح تخليه أحمر.
+        # إذا كان السعر فوق المتوسط (diff موجب) -> نستخدم "normal" فيطلع أخضر.
+        # ملاحظة: بعض إصدارات Streamlit تعكس، لذا استخدمت الشرط التالي للتحكم المطلق:
+        
+        st_color = "normal" if diff >= 0 else "inverse"
         
         m_cols[i].metric(
             label=label, 
             value=f"{val:.2f}", 
             delta=f"{diff:.2f} SAR", 
-            delta_color=color_mode
+            delta_color=st_color
         )
 
 # --- 7. Chart with Support Line ---
@@ -103,6 +105,6 @@ if analyze_btn:
     plot_df['SMA 50'] = plot_df['Close'].rolling(50).mean()
     plot_df['SMA 100'] = plot_df['Close'].rolling(100).mean()
     plot_df['SMA 200'] = plot_df['Close'].rolling(200).mean()
-    plot_df['Support'] = st.session_state['stop'] # خط الدعم الأفقي
+    plot_df['Support'] = st.session_state['stop'] # خط الدعم
     
     st.line_chart(plot_df)

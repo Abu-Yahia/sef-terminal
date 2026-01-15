@@ -5,7 +5,7 @@ import math
 from fpdf import FPDF
 
 # --- 1. Page Config ---
-st.set_page_config(page_title="SEF Terminal Pro", layout="wide")
+st.set_page_config(page_title="ChartFund Pro", layout="wide")
 
 # --- 2. Load TASI Data ---
 @st.cache_data
@@ -30,8 +30,17 @@ if 'ready' not in st.session_state:
         'sma50': 0.0, 'sma100': 0.0, 'sma200': 0.0, 'ready': False
     })
 
-# --- 4. Main UI ---
-st.title("🛡️ SEF Terminal Pro | Final Benchmark")
+# --- 4. Main UI (تعديل العنوان فقط بناءً على طلبك) ---
+col_logo, col_title = st.columns([1, 8])
+with col_logo:
+    # وضع أيقونة الروبوت التي اخترتها
+    st.image("https://r.jina.ai/i/053b93f7762649b3806a642921578334", width=100)
+with col_title:
+    st.title("ChartFund Pro")
+    st.write("**Created by AbuYahia**")
+    st.caption("⚠️ This content is for informational purposes only and not investment advice.")
+
+st.markdown("---")
 
 c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1, 1, 1, 0.8, 1])
 
@@ -101,14 +110,13 @@ if analyze_btn or st.session_state['ready']:
     st.subheader("📄 SEF Structural Analysis")
     result_status = "DANGEROUS (Avoid - Poor Reward)" if rr_ratio < 2 else "VALID (Good Risk/Reward)"
     
-    # حساب النسب المئوية للمتوسطات
     p50 = ((p_in - st.session_state['sma50']) / st.session_state['sma50']) * 100
     p100 = ((p_in - st.session_state['sma100']) / st.session_state['sma100']) * 100
     p200 = ((p_in - st.session_state['sma200']) / st.session_state['sma200']) * 100
 
     report_text = f"""
     SEF STRATEGIC ANALYSIS REPORT
-    Created By Abu Yahia
+    📝 Created By Abu Yahia
     ------------------------------
     Ticker: {symbol}.SR | Price: {p_in:.2f}
     
@@ -130,7 +138,6 @@ if analyze_btn or st.session_state['ready']:
     """
     st.code(report_text, language="text")
 
-    # PDF Generation
     def create_pdf(content):
         pdf = FPDF()
         pdf.add_page()
@@ -144,11 +151,10 @@ if analyze_btn or st.session_state['ready']:
     st.download_button(
         label="📥 Download PDF Report",
         data=pdf_data,
-        file_name=f"SEF_Report_{symbol}.pdf",
+        file_name=f"ChartFund_Report_{symbol}.pdf",
         mime="application/pdf"
     )
 
-    # Chart
     chart_raw = yf.download(f"{symbol}.SR", period="1y", progress=False)
     if isinstance(chart_raw.columns, pd.MultiIndex): chart_raw.columns = chart_raw.columns.get_level_values(0)
     plot_df = chart_raw[['Close']].copy()

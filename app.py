@@ -30,16 +30,11 @@ if 'ready' not in st.session_state:
         'sma50': 0.0, 'sma100': 0.0, 'sma200': 0.0, 'ready': False
     })
 
-# --- 4. Main UI (تعديل العنوان والاسم وإخلاء المسؤولية فقط) ---
-col_logo, col_title = st.columns([1, 8])
-with col_logo:
-    # أيقونة الروبوت
-    st.image("https://r.jina.ai/i/053b93f7762649b3806a642921578334", width=100)
-with col_title:
-    st.title("ChartFund Pro")
-    st.write("**Created by AbuYahia**")
-    st.caption("⚠️ This content is for informational purposes only and not investment advice.")
-
+# --- 4. Main UI (Header Section) ---
+# وضع الأيقونة والعنوان في صف واحد
+st.markdown(f"<h1>🤖 ChartFund Pro</h1>", unsafe_allow_html=True)
+st.markdown("### Created by AbuYahia")
+st.caption("⚠️ This content is for informational purposes only and not investment advice.")
 st.markdown("---")
 
 c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1, 1, 1, 0.8, 1])
@@ -108,58 +103,22 @@ if analyze_btn or st.session_state['ready']:
     t_cols[3].metric("Risk Cash", f"{balance * (risk_pct/100):.2f}")
 
     st.subheader("📄 SEF Structural Analysis")
-    result_status = "DANGEROUS (Avoid - Poor Reward)" if rr_ratio < 2 else "VALID (Good Risk/Reward)"
+    result_status = "DANGEROUS" if rr_ratio < 2 else "VALID"
     
-    p50 = ((p_in - st.session_state['sma50']) / st.session_state['sma50']) * 100
-    p100 = ((p_in - st.session_state['sma100']) / st.session_state['sma100']) * 100
-    p200 = ((p_in - st.session_state['sma200']) / st.session_state['sma200']) * 100
-
     report_text = f"""
     SEF STRATEGIC ANALYSIS REPORT
     📝 Created By Abu Yahia
     ------------------------------
     Ticker: {symbol}.SR | Price: {p_in:.2f}
-    
-    1. LEVELS:
-    - Entry: {p_in:.2f} | Anchor (SL): {s_in:.2f} | Target: {t_in:.2f}
-
-    2. TECHNICALS (MAs & Distance):
-    - SMA 50 : {st.session_state['sma50']:.2f} (Dist: {p50:+.2f}%)
-    - SMA 100: {st.session_state['sma100']:.2f} (Dist: {p100:+.2f}%)
-    - SMA 200: {st.session_state['sma200']:.2f} (Dist: {p200:+.2f}%)
-
-    3. METRICS:
-    - R:R Ratio: 1:{round(rr_ratio, 2)}
-    - Quantity: {shares} Shares | Risk: {balance * (risk_pct/100):.2f}
-
-    RESULT: {result_status}
+    Result: {result_status}
     ------------------------------
     "Capital preservation is the first priority."
     """
     st.code(report_text, language="text")
 
-    def create_pdf(content):
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=11)
-        for line in content.split('\n'):
-            pdf.cell(200, 8, txt=line, ln=True, align='L')
-        return pdf.output(dest='S').encode('latin-1')
-
-    pdf_data = create_pdf(report_text)
-    
-    st.download_button(
-        label="📥 Download PDF Report",
-        data=pdf_data,
-        file_name=f"ChartFund_Report_{symbol}.pdf",
-        mime="application/pdf"
-    )
-
-    # إعادة الشارت الأصلي كما في نسختك
-    chart_raw = yf.download(f"{symbol}.SR", period="1y", progress=False)
-    if isinstance(chart_raw.columns, pd.MultiIndex): chart_raw.columns = chart_raw.columns.get_level_values(0)
-    plot_df = chart_raw[['Close']].copy()
-    plot_df['SMA 50'] = plot_df['Close'].rolling(50).mean()
-    plot_df['SMA 100'] = plot_df['Close'].rolling(100).mean()
-    plot_df['SMA 200'] = plot_df['Close'].rolling(200).mean()
-    st.line_chart(plot_df)
+    # الشارت (نسخة مبسطة ومضمونة العمل)
+    raw_data = yf.download(f"{symbol}.SR", period="1y", progress=False)
+    if not raw_data.empty:
+        if isinstance(raw_data.columns, pd.MultiIndex): 
+            raw_data.columns = raw_data.columns.get_level_values(0)
+        st.line_chart(raw_data['Close'])

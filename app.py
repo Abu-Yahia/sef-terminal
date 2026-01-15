@@ -1,111 +1,140 @@
 import streamlit as st
-import pandas as pd
 import yfinance as yf
+import pandas as pd
 import math
+from fpdf import FPDF
+import base64
 
-# --- 1. Page Config ---
-st.set_page_config(page_title="SEF Terminal Pro", layout="wide")
+# --- إعدادات الصفحة ---
+st.set_page_config(page_title="SEF Terminal Pro", page_icon="🛡️", layout="wide")
 
-# --- 2. Load TASI Data ---
-@st.cache_data
-def load_tasi_data():
+# --- 1. الدوال الأساسية ---
+def fetch_live_data(ticker_symbol):
     try:
-        df = pd.read_csv("TASI.csv")
-        df.columns = [c.strip() for c in df.columns]
-        df['Ticker'] = df['Ticker'].astype(str).str.strip()
-        df['Name_Ar'] = df['Company Name (Arabic)'].astype(str).str.strip()
-        df['Display'] = df['Name_Ar'] + " | " + df['Ticker']
-        mapping = dict(zip(df['Display'], df['Ticker']))
-        return sorted(list(mapping.keys())), mapping
-    except Exception as e:
-        st.error(f"Error: {e}")
-        return [], {}
+        stock = yf.Ticker(ticker_symbol)
+        df = stock.history(period="1mo")
+        if df.empty: return None, None, None
+        current_p = round(df['Close'].iloc[-1], 2)
+        auto_anchor = round(df['Low'].min(), 2)
+        auto_target = round(df['High'].max(), 2)
+        return current_p, auto_anchor, auto_target
+    except: return None, None, None
 
-options, tasi_mapping = load_tasi_data()
+def generate_pdf_link(content, ticker):
+    try:
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", 'B', 16)
+        pdf.cell(200, 10, txt="SEF STRATEGIC ANALYSIS", ln=True, align='C')
+        pdf.ln(5)
+        pdf.set_font("Arial", size=10)
+        pdf.cell(200, 10, txt="Created By Abu Yahia", ln=True, align='L') # توقيع يسار في PDF
+        pdf.ln(10)
+        clean_text = content.encode('ascii', 'ignore').decode('ascii')
+        for line in clean_text.split('\n'):
+            pdf.cell(0, 8, txt=line, ln=True)
+        pdf_output = pdf.output(dest='S').encode('latin-1')
+        b64 = base64.b64encode(pdf_output).decode()
+        return f'<a href="data:application/octet-stream;base64,{b64}" download="SEF_{ticker}_Report.pdf" style="background-color: #ff4b4b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; margin-top: 10px;">📥 Download PDF Report</a>'
+    except: return "⚠️ PDF Error"
 
-# --- 3. Session State ---
-if 'price' not in st.session_state:
-    st.session_state.update({
-        'price': 0.0, 'stop': 0.0, 'target': 0.0,
-        'sma50': 0.0, 'sma100': 0.0, 'sma200': 0.0, 'ready': False
-    })
+# --- 2. واجهة المستخدم ---
+# العنوان الرئيسي
+st.title("🛡️ SEF Terminal | Ultimate Hub")
 
-# --- 4. Main UI ---
-st.title("🛡️ SEF Terminal Pro | Abu Yahia")
+# التوقيع: محاذاة لليسار تحت SEF مع رمز القلم 🖋️
+st.markdown("<div style='text-align: left; padding-left: 50px; margin-top: -20px; color: #555; font-size: 1.1em;'>🖋️ Created By Abu Yahia</div>", unsafe_allow_html=True)
 
-c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1, 1, 1, 0.8, 1])
+# السايدبار لإعدادات المحفظة
+balance = st.sidebar.number_input("Portfolio Balance", value=100000)
+risk_pct = st.sidebar.slider("Risk per Trade (%)", 0.5, 5.0, 1.0)
+
+# إدارة الذاكرة التفاعلية للقيم
+if 'p_val' not in st.session_state: st.session_state['p_val'] = 33.90
+if 'a_val' not in st.session_state: st.session_state['a_val'] = 31.72
+if 't_val' not in st.session_state: st.session_state['t_val'] = 39.36
+
+st.markdown("---")
+
+# صف المدخلات والأزرار التفاعلية
+c1, c2, c3, c4, c5, c6 = st.columns([1.5, 1.2, 1.2, 1.2, 1.2, 1.5])
 
 with c1:
-    selected_stock = st.selectbox("Search Stock:", options=options)
-    symbol = tasi_mapping[selected_stock]
-
-with c2: p_in = st.number_input("Price", value=float(st.session_state['price']), format="%.2f")
-with c3: s_in = st.number_input("Stop Loss", value=float(st.session_state['stop']), format="%.2f")
-with c4: t_in = st.number_input("Target", value=float(st.session_state['target']), format="%.2f")
-
-# --- 5. Radar Logic ---
+    ticker = st.text_input("Ticker Symbol", "4009.SR").upper()
+with c2:
+    p_in = st.number_input("Market Price", value=float(st.session_state['p_val']), step=0.01)
+with c3:
+    a_in = st.number_input("Anchor Level", value=float(st.session_state['a_val']), step=0.01)
+with c4:
+    t_in = st.number_input("Target Price", value=float(st.session_state['t_val']), step=0.01)
 with c5:
     st.write("##")
-    if st.button("🛰️ RADAR", use_container_width=True):
-        try:
-            raw = yf.download(f"{symbol}.SR", period="2y", progress=False)
-            if not raw.empty:
-                if isinstance(raw.columns, pd.MultiIndex): raw.columns = raw.columns.get_level_values(0)
-                close = raw['Close']
-                st.session_state.update({
-                    'price': float(close.iloc[-1]),
-                    'stop': float(raw['Low'].tail(20).min()),
-                    'target': float(raw['High'].tail(20).max()),
-                    'sma50': float(close.rolling(50).mean().iloc[-1]),
-                    'sma100': float(close.rolling(100).mean().iloc[-1]),
-                    'sma200': float(close.rolling(200).mean().iloc[-1]),
-                    'ready': True
-                })
-                st.rerun()
-        except Exception as e: st.error(f"Error: {e}")
-
+    if st.button("🛰️ Radar", use_container_width=True):
+        p, a, t = fetch_live_data(ticker)
+        if p:
+            st.session_state['p_val'] = p
+            st.session_state['a_val'] = a
+            st.session_state['t_val'] = t
+            st.rerun()
 with c6:
     st.write("##")
-    analyze_btn = st.button("📊 ANALYZE", use_container_width=True)
+    analyze_trigger = st.button("📊 Analyze", use_container_width=True)
 
-# --- 6. Technical Indicators (Clean Design) ---
-if st.session_state['ready']:
-    st.subheader("📊 Technical Indicators")
-    m_cols = st.columns(3)
-    ma_list = [
-        ("SMA 50", st.session_state['sma50']),
-        ("SMA 100", st.session_state['sma100']),
-        ("SMA 200", st.session_state['sma200'])
-    ]
-    
-    for i, (label, val) in enumerate(ma_list):
-        diff = st.session_state['price'] - val
-        # اللون الأحمر الصارم للقيم السالبة
-        color = "#FF4B4B" if diff < 0 else "#09AB3B" 
-        direction = "↓" if diff < 0 else "↑"
-        
-        # تصميم البطاقات بلون الحدود الجانبية المتغير حسب الحالة
-        m_cols[i].markdown(f"""
-            <div style="background-color: #f8f9fb; padding: 20px; border-radius: 10px; border-left: 6px solid {color}; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
-                <p style="margin:0; font-size:15px; color:#5c5c5c; font-weight:bold;">{label}</p>
-                <h2 style="margin:0; color:#31333F; font-size:28px;">{val:.2f}</h2>
-                <p style="margin:0; font-size:18px; color:{color}; font-weight:bold;">
-                    {direction} {abs(diff):.2f} SAR
-                </p>
-            </div>
-        """, unsafe_allow_html=True)
+st.markdown("---")
 
-# --- 7. Chart Section ---
-if analyze_btn:
-    st.markdown("---")
-    chart_raw = yf.download(f"{symbol}.SR", period="1y", progress=False)
-    if isinstance(chart_raw.columns, pd.MultiIndex): chart_raw.columns = chart_raw.columns.get_level_values(0)
+# --- 3. عرض التحليل الذكي ---
+if analyze_trigger:
+    risk_per_share = abs(p_in - a_in)
+    risk_cash = balance * (risk_pct / 100)
     
-    plot_df = chart_raw[['Close']].copy()
-    plot_df['SMA 50'] = plot_df['Close'].rolling(50).mean()
-    plot_df['SMA 100'] = plot_df['Close'].rolling(100).mean()
-    plot_df['SMA 200'] = plot_df['Close'].rolling(200).mean()
-    plot_df['Support'] = st.session_state['stop']
+    if risk_per_share > 0:
+        rr = (t_in - p_in) / risk_per_share
+        qty = math.floor(risk_cash / risk_per_share)
+    else: rr, qty = 0, 0
+
+    # تقييم العائد مقابل المخاطرة
+    if rr >= 3: rr_advice = "🟢 EXCELLENT (Professional Grade)"
+    elif 2 <= rr < 3: rr_advice = "🟡 GOOD (Acceptable Trade)"
+    else: rr_advice = "🔴 DANGEROUS (Avoid - Poor Reward)"
+
+    # عرض الأرقام الرئيسية (Metrics)
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Live Price", p_in)
+    m2.metric("R:R Ratio", f"1:{round(rr, 2)}")
+    m3.metric("Shares", qty)
+    m4.metric("Risk Cash", f"{round(risk_cash, 2)}")
+
+    # بناء نص التقرير
+    full_report = f"""
+SEF STRATEGIC ANALYSIS REPORT
+🖋️ Created By Abu Yahia
+------------------------------------
+Ticker: {ticker} | Price: {p_in}
+1. LEVELS:
+- Entry: {p_in} | Anchor (SL): {a_in} | Target: {t_in}
+
+2. METRICS:
+- R:R Ratio: 1:{round(rr, 2)}
+- Quantity: {qty} Shares | Risk: {round(risk_cash, 2)}
+
+RESULT: {rr_advice}
+------------------------------------
+"Capital preservation is the first priority."
+    """
+    st.markdown("### 📄 SEF Structural Analysis")
+    st.code(full_report, language='text')
     
-    st.line_chart(plot_df)
-    st.info(f"The 'Support' line is based on the 20-day low: {st.session_state['stop']:.2f}")
+    # رابط تحميل PDF المحدث
+    st.markdown(generate_pdf_link(full_report, ticker), unsafe_allow_html=True)
+
+    # الشارت الفني مع المتوسط 200
+    hist = yf.Ticker(ticker).history(period="1y")
+    if not hist.empty:
+        c_data = hist[['Close']].copy()
+        c_data['Anchor'] = a_in
+        c_data['Target'] = t_in
+        c_data['EMA_200'] = c_data['Close'].ewm(span=200, adjust=False).mean()
+        st.line_chart(c_data)
+    
+    if rr >= 3: st.balloons()
+

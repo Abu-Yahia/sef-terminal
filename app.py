@@ -30,9 +30,8 @@ if 'price' not in st.session_state:
         'sma50': 0.0, 'sma100': 0.0, 'sma200': 0.0, 'ready': False
     })
 
-# --- 4. UI Layout ---
-st.title("🛡️ SEF Terminal Pro | Fixed Visuals")
-st.markdown("---")
+# --- 4. Main UI ---
+st.title("🛡️ SEF Terminal Pro | Strict Color Control")
 
 c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1, 1, 1, 0.8, 1])
 
@@ -44,7 +43,7 @@ with c2: p_in = st.number_input("Price", value=float(st.session_state['price']),
 with c3: s_in = st.number_input("Stop Loss", value=float(st.session_state['stop']), format="%.2f")
 with c4: t_in = st.number_input("Target", value=float(st.session_state['target']), format="%.2f")
 
-# --- 5. Radar Button ---
+# --- 5. Radar Logic ---
 with c5:
     st.write("##")
     if st.button("🛰️ RADAR", use_container_width=True):
@@ -69,38 +68,41 @@ with c6:
     st.write("##")
     analyze_btn = st.button("📊 ANALYZE", use_container_width=True)
 
-# --- 6. Technical Indicators (STRICT COLOR LOGIC) ---
+# --- 6. Technical Indicators (THE FIX: FORCE RED FOR NEGATIVE) ---
 if st.session_state['ready']:
     st.subheader("📊 Technical Indicators")
     m_cols = st.columns(3)
-    ma_data = [("SMA 50", st.session_state['sma50']), 
-               ("SMA 100", st.session_state['sma100']), 
-               ("SMA 200", st.session_state['sma200'])]
+    ma_data = [
+        ("SMA 50", st.session_state['sma50']), 
+        ("SMA 100", st.session_state['sma100']), 
+        ("SMA 200", st.session_state['sma200'])
+    ]
     
     for i, (label, val) in enumerate(ma_data):
         diff = st.session_state['price'] - val
-        # الهلال الأحمر هنا: نجبره يصير أحمر إذا كان تحت المتوسط
-        # delta_color="inverse" تجعل السالب أحمر والموجب أخضر
-        st_color = "inverse" if diff < 0 else "normal"
         
-        m_cols[i].metric(label, f"{val:.2f}", delta=f"{diff:.2f} SAR", delta_color=st_color)
+        # التعديل الجوهري هنا:
+        # إذا كان السعر أقل من المتوسط (الفرق سالب)، نستخدم inverse ليظهر باللون الأحمر.
+        # إذا كان السعر أعلى من المتوسط (الفرق موجب)، نستخدم normal ليظهر باللون الأخضر.
+        color_mode = "inverse" if diff < 0 else "normal"
+        
+        m_cols[i].metric(
+            label=label, 
+            value=f"{val:.2f}", 
+            delta=f"{diff:.2f} SAR", 
+            delta_color=color_mode
+        )
 
 # --- 7. Chart with Support Line ---
 if analyze_btn:
-    risk_amt = abs(p_in - s_in)
-    if risk_amt > 0:
-        shares = math.floor((1000 * 1.0) / risk_amt) # Placeholder calculation
-        st.markdown("---")
-        st.success(f"Strategy for: {selected_stock}")
-        
-        # Financial Chart
-        chart_raw = yf.download(f"{symbol}.SR", period="1y", progress=False)
-        if isinstance(chart_raw.columns, pd.MultiIndex): chart_raw.columns = chart_raw.columns.get_level_values(0)
-        
-        plot_df = chart_raw[['Close']].copy()
-        plot_df['SMA 50'] = plot_df['Close'].rolling(50).mean()
-        plot_df['SMA 100'] = plot_df['Close'].rolling(100).mean()
-        plot_df['SMA 200'] = plot_df['Close'].rolling(200).mean()
-        plot_df['Support'] = st.session_state['stop'] # خط الدعم الأفقي
-        
-        st.line_chart(plot_df)
+    st.markdown("---")
+    chart_raw = yf.download(f"{symbol}.SR", period="1y", progress=False)
+    if isinstance(chart_raw.columns, pd.MultiIndex): chart_raw.columns = chart_raw.columns.get_level_values(0)
+    
+    plot_df = chart_raw[['Close']].copy()
+    plot_df['SMA 50'] = plot_df['Close'].rolling(50).mean()
+    plot_df['SMA 100'] = plot_df['Close'].rolling(100).mean()
+    plot_df['SMA 200'] = plot_df['Close'].rolling(200).mean()
+    plot_df['Support'] = st.session_state['stop'] # خط الدعم الأفقي
+    
+    st.line_chart(plot_df)

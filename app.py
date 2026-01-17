@@ -11,7 +11,6 @@ st.markdown("<style>.stAppToolbar {display: none;}</style>", unsafe_allow_html=T
 @st.cache_data
 def load_tasi_data():
     try:
-        # تأكد من وجود ملف TASI.csv في نفس المجلد
         df = pd.read_csv("TASI.csv")
         df.columns = [c.strip() for c in df.columns]
         df['Ticker'] = df['Ticker'].astype(str).str.strip()
@@ -33,44 +32,33 @@ if 'ready' not in st.session_state:
         'chg': 0.0, 'pct': 0.0, 'low52': 0.0, 'high52': 1.0
     })
 
-# --- 4. Main UI Header ---
 st.title("🛡️ SEF Terminal | Ultimate Hub")
-st.markdown("""
-    <div style='text-align: left; margin-top: -20px; margin-bottom: 20px;'>
-        <p style='margin:0; font-size: 1.2em; font-weight: bold; color: #555;'>Created By Abu Yahia</p>
-    </div>
-    """, unsafe_allow_html=True)
 
-# --- 5. Inputs Section (Row 1) ---
+# --- 4. Inputs Section (Modified to include Fair Value Square) ---
 c1, c2, c3, c4, c5, c6 = st.columns([2.0, 0.8, 0.8, 0.8, 0.8, 1.2])
-
 with c1:
     selected_stock = st.selectbox("Search Stock:", options=options)
     symbol = tasi_mapping[selected_stock]
-
-# مدخلات المستخدم
-p_in = c2.number_input("Market Price", value=float(st.session_state['price']), format="%.2f")
-s_in = c3.number_input("Anchor Level", value=float(st.session_state['stop']), format="%.2f")
-t_in = c4.number_input("Target Price", value=float(st.session_state['target']), format="%.2f")
-# 1. مربع الفير فاليو (كما طلبت)
+with c2: p_in = st.number_input("Market Price", value=float(st.session_state['price']), format="%.2f")
+with c3: s_in = st.number_input("Anchor Level", value=float(st.session_state['stop']), format="%.2f")
+with c4: t_in = st.number_input("Target Price", value=float(st.session_state['target']), format="%.2f")
+# 1. إضافة مربع الفير فاليو هنا (طلبك الأول)
 fv_in = c5.number_input("Fair Value", value=float(st.session_state['fv_val']), format="%.2f")
 
-# تحديث فوري للقيم في الذاكرة
+# تحديث القيم لحظياً
 st.session_state['fv_val'] = fv_in
 st.session_state['price'] = p_in
 
-# --- 6. Ticker Info Bar (52-Week & Fair Value Status Under it) ---
+# --- 5. Ticker Info Bar (Fair Value Bar under 52-Week Bar) ---
 if st.session_state['ready']:
     color = "#09AB3B" if st.session_state['chg'] >= 0 else "#FF4B4B"
-    
-    # حساب بار 52 أسبوع
     t_range = st.session_state['high52'] - st.session_state['low52']
     pos_52 = ((p_in - st.session_state['low52']) / t_range) * 100 if t_range > 0 else 0
     
-    # حساب بار القيمة العادلة (لحظي)
+    # حساب موقع بار القيمة العادلة
     if fv_in > 0:
         fv_diff = ((p_in - fv_in) / fv_in) * 100
-        pos_fv = 50 + (fv_diff * 2) # حساسية المؤشر
+        pos_fv = 50 + (fv_diff * 2)
         pos_fv = max(5, min(95, pos_fv))
     else: pos_fv = 50
 
@@ -79,7 +67,7 @@ if st.session_state['ready']:
             <div>
                 <h2 style="margin: 0; color: #131722;">{st.session_state['company_name']}</h2>
                 <div style="display: flex; align-items: baseline; gap: 15px; margin-top: 10px;">
-                    <span style="font-size: 2.8em; font-weight: bold; color: #131722;">{p_in:.2f}</span>
+                    <span style="font-size: 2.8em; font-weight: bold;">{p_in:.2f}</span>
                     <span style="font-size: 1.3em; color: {color}; font-weight: bold;">{st.session_state['chg']:+.2f} ({st.session_state['pct']:+.2f}%)</span>
                 </div>
             </div>
@@ -103,7 +91,7 @@ if st.session_state['ready']:
         </div>
     """, unsafe_allow_html=True)
 
-# --- 7. Radar & Analyze Buttons ---
+# --- 6. Radar & Analyze Logic ---
 with c6:
     st.write("##")
     radar_col, analyze_col = st.columns(2)
@@ -123,7 +111,7 @@ if radar_btn:
             'high52': float(raw['High'].tail(252).max()),
             'stop': float(raw['Low'].tail(20).min()),
             'target': float(raw['High'].tail(20).max()),
-            'fv_val': cur, # قيمة افتراضية
+            'fv_val': cur,
             'sma50': float(close.rolling(50).mean().iloc[-1]),
             'sma100': float(close.rolling(100).mean().iloc[-1]),
             'sma200': float(close.rolling(200).mean().iloc[-1]),
@@ -131,7 +119,7 @@ if radar_btn:
         })
         st.rerun()
 
-# --- 8. Full Strategic Report (The one you requested) ---
+# --- 7. Full Strategic Report ---
 if st.session_state['ready']:
     st.markdown("---")
     risk_amt = abs(p_in - s_in)
@@ -140,7 +128,6 @@ if st.session_state['ready']:
     risk_pct = st.sidebar.slider("Risk %", 0.5, 5.0, 1.0)
     shares = math.floor((balance * (risk_pct/100)) / risk_amt) if risk_amt > 0 else 0
     
-    # حساب المسافات للمتوسطات
     p50 = ((p_in - st.session_state['sma50']) / st.session_state['sma50']) * 100 if st.session_state['sma50'] else 0
     p100 = ((p_in - st.session_state['sma100']) / st.session_state['sma100']) * 100 if st.session_state['sma100'] else 0
     p200 = ((p_in - st.session_state['sma200']) / st.session_state['sma200']) * 100 if st.session_state['sma200'] else 0
@@ -169,11 +156,10 @@ if st.session_state['ready']:
     ------------------------------
     "Capital preservation is the first priority."
     """
-    
     st.subheader("📄 Strategic Analysis Report")
     st.code(report_text, language="text")
 
-    # Chart with SMAs
+    # Chart
     chart_data = yf.download(f"{symbol}.SR", period="1y", progress=False)
     if not chart_data.empty:
         if isinstance(chart_data.columns, pd.MultiIndex): chart_data.columns = chart_data.columns.get_level_values(0)

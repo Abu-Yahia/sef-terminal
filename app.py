@@ -21,7 +21,7 @@ def load_tasi_data():
         df['Display'] = df['Name_Ar'] + " | " + df['Ticker']
         mapping = dict(zip(df['Display'], df['Ticker']))
         return sorted(list(mapping.keys())), mapping
-    except:
+    except Exception as e:
         return [], {}
 
 options, tasi_mapping = load_tasi_data()
@@ -120,7 +120,7 @@ with c6:
     st.write("##")
     analyze_btn = st.button("📊 ANALYZE", use_container_width=True)
 
-# --- 8. التحليل والمؤشرات الفنية (SMA) ---
+# --- 8. التحليل الفني والمؤشرات (SMA) ---
 if st.session_state['ready']:
     st.subheader("📈 Technical Indicators")
     m_cols = st.columns(3)
@@ -137,6 +137,7 @@ if st.session_state['ready']:
             </div>
         """, unsafe_allow_html=True)
 
+# --- 9. تحليل الهيكل وتقرير PDF ---
 if analyze_btn or st.session_state['ready']:
     st.markdown("---")
     risk_amt = abs(p_in - s_in)
@@ -151,7 +152,51 @@ if analyze_btn or st.session_state['ready']:
     t_cols[2].metric("Shares", f"{shares}")
     t_cols[3].metric("Risk Cash", f"{balance * (risk_pct/100):.2f}")
 
-    # التقرير النصي والشارت (كما في نسختك الأصلية)
     st.subheader("📄 SEF Structural Analysis")
-    result_status = "VALID" if rr_ratio >= 2 else "DANGEROUS"
-    report_text = f"Ticker: {symbol}.SR | Price: {p_in:.2f}\nResult: {result_status}\n'
+    result_status = "VALID (Good Risk/Reward)" if rr_ratio >= 2 else "DANGEROUS (Avoid - Poor Reward)"
+    
+    p50 = ((p_in - st.session_state['sma50']) / st.session_state['sma50']) * 100 if st.session_state['sma50'] else 0
+    p100 = ((p_in - st.session_state['sma100']) / st.session_state['sma100']) * 100 if st.session_state['sma100'] else 0
+    p200 = ((p_in - st.session_state['sma200']) / st.session_state['sma200']) * 100 if st.session_state['sma200'] else 0
+
+    report_text = f"""
+    SEF STRATEGIC ANALYSIS REPORT
+    Created By Abu Yahia
+    ------------------------------
+    Ticker: {symbol}.SR | Price: {p_in:.2f}
+    
+    1. LEVELS:
+    - Entry: {p_in:.2f} | Anchor (SL): {s_in:.2f} | Target: {t_in:.2f}
+
+    2. TECHNICALS (MAs & Distance):
+    - SMA 50 : {st.session_state['sma50']:.2f} (Dist: {p50:+.2f}%)
+    - SMA 100: {st.session_state['sma100']:.2f} (Dist: {p100:+.2f}%)
+    - SMA 200: {st.session_state['sma200']:.2f} (Dist: {p200:+.2f}%)
+
+    3. METRICS:
+    - R:R Ratio: 1:{round(rr_ratio, 2)}
+    - Quantity: {shares} Shares | Risk: {balance * (risk_pct/100):.2f}
+
+    RESULT: {result_status}
+    ------------------------------
+    "Capital preservation is the first priority."
+    """
+    st.code(report_text, language="text")
+
+    # توليد PDF
+    def create_pdf(content):
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=11)
+        for line in content.split('\n'):
+            pdf.cell(200, 8, txt=line, ln=True, align='L')
+        return pdf.output(dest='S').encode('latin-1')
+
+    pdf_data = create_pdf(report_text)
+    st.download_button("📥 Download PDF Report", data=pdf_data, file_name=f"SEF_{symbol}.pdf", mime="application/pdf")
+
+    # الشارت
+    chart_raw = yf.download(f"{symbol}.SR", period="1y", progress=False)
+    if not chart_raw.empty:
+        if isinstance(chart_raw.columns, pd.MultiIndex): chart_raw.columns = chart_raw.columns.get_level_values(0)
+        st.line_chart(chart_raw['Close'])

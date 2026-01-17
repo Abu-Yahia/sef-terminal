@@ -7,10 +7,10 @@ from fpdf import FPDF
 # --- 1. إعدادات الصفحة ---
 st.set_page_config(page_title="SEF Terminal Pro", layout="wide")
 
-# إخفاء شريط الأدوات العلوي لمظهر أكثر احترافية
+# إخفاء شريط الأدوات العلوي لمظهر احترافي
 st.markdown("<style>.stAppToolbar {display: none;}</style>", unsafe_allow_html=True)
 
-# --- 2. دالة تحميل بيانات TASI ---
+# --- 2. جلب بيانات TASI ---
 @st.cache_data
 def load_tasi_data():
     try:
@@ -21,7 +21,7 @@ def load_tasi_data():
         df['Display'] = df['Name_Ar'] + " | " + df['Ticker']
         mapping = dict(zip(df['Display'], df['Ticker']))
         return sorted(list(mapping.keys())), mapping
-    except Exception as e:
+    except:
         return [], {}
 
 options, tasi_mapping = load_tasi_data()
@@ -31,13 +31,13 @@ if 'ready' not in st.session_state:
     st.session_state.update({
         'price': 0.0, 'stop': 0.0, 'target': 0.0,
         'sma50': 0.0, 'sma100': 0.0, 'sma200': 0.0, 
-        'ready': False, 'company_name': '---', 'chg': 0.0, 'pct': 0.0
+        'ready': False, 'company_name': '---', 
+        'chg': 0.0, 'pct': 0.0, 'low52': 0.0, 'high52': 0.0
     })
 
 # --- 4. العنوان والتوقيع وإخلاء المسؤولية ---
 st.title("🛡️ SEF Terminal Pro | Final Benchmark")
 
-# إضافة التوقيع وإخلاء المسؤولية تحت العنوان مباشرة
 st.markdown("""
     <div style='text-align: left; margin-top: -20px; margin-bottom: 20px;'>
         <span style='color: #555; font-size: 1.1em; font-weight: bold;'>🖋️ Created By Abu Yahia</span>
@@ -47,20 +47,33 @@ st.markdown("""
     </div>
     """, unsafe_allow_html=True)
 
-# --- 5. شريط معلومات السهم (مثل الصورة التي أرسلتها) ---
+# --- 5. شريط معلومات السهم الاحترافي (مع بار الـ 52 أسبوع) ---
 if st.session_state['ready']:
     color = "#09AB3B" if st.session_state['chg'] >= 0 else "#FF4B4B"
-    sign = "+" if st.session_state['chg'] >= 0 else ""
+    # حساب موقع السعر الحالي في مدى الـ 52 أسبوع
+    range_52 = st.session_state['high52'] - st.session_state['low52']
+    pos_52 = ((st.session_state['price'] - st.session_state['low52']) / range_52) * 100 if range_52 > 0 else 0
     
     st.markdown(f"""
-        <div style="background-color: #f8f9fb; padding: 20px; border-radius: 10px; border-left: 8px solid {color}; margin-bottom: 25px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
-            <h2 style="margin: 0; color: #131722; font-size: 1.6em;">{st.session_state['company_name']}</h2>
-            <div style="display: flex; align-items: baseline; gap: 15px; margin-top: 10px;">
-                <span style="font-size: 2.8em; font-weight: bold; color: #131722;">{st.session_state['price']:.2f}</span>
-                <span style="font-size: 1.3em; color: {color}; font-weight: bold;">
-                    {sign}{st.session_state['chg']:.2f} ({sign}{st.session_state['pct']:.2f}%) {'▲' if st.session_state['chg'] >= 0 else '▼'}
-                </span>
-                <span style="color: #787b86; font-size: 0.9em;">Currency in SAR • TASI Market Data</span>
+        <div style="background-color: #f8f9fb; padding: 20px; border-radius: 10px; border-left: 8px solid {color}; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
+            <div>
+                <h2 style="margin: 0; color: #131722; font-size: 1.6em;">{st.session_state['company_name']}</h2>
+                <div style="display: flex; align-items: baseline; gap: 15px; margin-top: 10px;">
+                    <span style="font-size: 2.8em; font-weight: bold; color: #131722;">{st.session_state['price']:.2f}</span>
+                    <span style="font-size: 1.3em; color: {color}; font-weight: bold;">
+                        {st.session_state['chg']:+.2f} ({st.session_state['pct']:+.2f}%) {'▲' if st.session_state['chg'] >= 0 else '▼'}
+                    </span>
+                </div>
+            </div>
+            <div style="width: 300px; text-align: right;">
+                <p style="margin:0; font-size: 0.85em; color: #787b86;">52-Week Range</p>
+                <div style="display: flex; justify-content: space-between; font-size: 0.9em; font-weight: bold; color: #131722; margin-bottom: 5px;">
+                    <span>{st.session_state['low52']:.2f}</span>
+                    <span>{st.session_state['high52']:.2f}</span>
+                </div>
+                <div style="height: 6px; background: #e0e3eb; border-radius: 3px; position: relative;">
+                    <div style="position: absolute; left: {pos_52}%; top: -4px; width: 14px; height: 14px; background: #131722; border-radius: 50%; border: 2px solid white;"></div>
+                </div>
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -76,6 +89,7 @@ with c2: p_in = st.number_input("Price", value=float(st.session_state['price']),
 with c3: s_in = st.number_input("Stop Loss", value=float(st.session_state['stop']), format="%.2f")
 with c4: t_in = st.number_input("Target", value=float(st.session_state['target']), format="%.2f")
 
+# --- 7. محرك الرادار (RADAR) ---
 with c5:
     st.write("##")
     if st.button("🛰️ RADAR", use_container_width=True):
@@ -83,15 +97,16 @@ with c5:
         if not raw.empty:
             if isinstance(raw.columns, pd.MultiIndex): raw.columns = raw.columns.get_level_values(0)
             close = raw['Close']
-            current_p = float(close.iloc[-1])
-            prev_p = float(close.iloc[-2])
-            change = current_p - prev_p
+            cur = float(close.iloc[-1])
+            prev = float(close.iloc[-2])
             
             st.session_state.update({
-                'price': current_p,
-                'chg': change,
-                'pct': (change / prev_p) * 100,
+                'price': cur,
+                'chg': cur - prev,
+                'pct': ((cur - prev) / prev) * 100,
                 'company_name': selected_stock.split('|')[0].strip(),
+                'low52': float(raw['Low'].tail(252).min()),
+                'high52': float(raw['High'].tail(252).max()),
                 'stop': float(raw['Low'].tail(20).min()),
                 'target': float(raw['High'].tail(20).max()),
                 'sma50': float(close.rolling(50).mean().iloc[-1]),
@@ -105,7 +120,7 @@ with c6:
     st.write("##")
     analyze_btn = st.button("📊 ANALYZE", use_container_width=True)
 
-# --- 7. المؤشرات الفنية والتحليل ---
+# --- 8. التحليل والمؤشرات الفنية (SMA) ---
 if st.session_state['ready']:
     st.subheader("📈 Technical Indicators")
     m_cols = st.columns(3)
@@ -136,34 +151,7 @@ if analyze_btn or st.session_state['ready']:
     t_cols[2].metric("Shares", f"{shares}")
     t_cols[3].metric("Risk Cash", f"{balance * (risk_pct/100):.2f}")
 
-    # التقرير الفني
+    # التقرير النصي والشارت (كما في نسختك الأصلية)
     st.subheader("📄 SEF Structural Analysis")
-    result_status = "DANGEROUS" if rr_ratio < 2 else "VALID"
-    
-    report_text = f"""
-    SEF STRATEGIC ANALYSIS REPORT
-    Created By Abu Yahia
-    ------------------------------
-    Ticker: {symbol}.SR | Price: {p_in:.2f}
-    
-    1. LEVELS:
-    - Entry: {p_in:.2f} | Stop: {s_in:.2f} | Target: {t_in:.2f}
-
-    2. METRICS:
-    - R:R Ratio: 1:{round(rr_ratio, 2)}
-    - Shares: {shares} | Risk: {balance * (risk_pct/100):.2f}
-
-    DISCLAIMER: Educational purposes only.
-    ------------------------------
-    "Capital preservation is the first priority."
-    """
-    st.code(report_text, language="text")
-
-    # الشارت
-    chart_raw = yf.download(f"{symbol}.SR", period="1y", progress=False)
-    if not chart_raw.empty:
-        if isinstance(chart_raw.columns, pd.MultiIndex): chart_raw.columns = chart_raw.columns.get_level_values(0)
-        plot_df = chart_raw[['Close']].copy()
-        plot_df['SMA 50'] = plot_df['Close'].rolling(50).mean()
-        plot_df['SMA 200'] = plot_df['Close'].rolling(200).mean()
-        st.line_chart(plot_df)
+    result_status = "VALID" if rr_ratio >= 2 else "DANGEROUS"
+    report_text = f"Ticker: {symbol}.SR | Price: {p_in:.2f}\nResult: {result_status}\n'

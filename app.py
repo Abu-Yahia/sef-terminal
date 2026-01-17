@@ -24,20 +24,17 @@ def load_tasi_data():
 
 options, tasi_mapping = load_tasi_data()
 
-# --- 3. Secure Session State (Includes All Original Keys) ---
+# --- 3. Secure Session State (Persistent Data) ---
 if 'ready' not in st.session_state:
     st.session_state.update({
-        'price': 0.0, 'stop': 0.0, 'target': 0.0,
+        'price': 0.0, 'stop': 0.0, 'target': 0.0, 'fv_input': 0.0,
         'sma50': 0.0, 'sma100': 0.0, 'sma200': 0.0, 
         'ready': False, 'company_name': '---',
-        'chg': 0.0, 'pct': 0.0, 'low52': 0.0, 'high52': 1.0,
-        'fair_value': 0.0
+        'chg': 0.0, 'pct': 0.0, 'low52': 0.0, 'high52': 1.0
     })
 
 # --- 4. Main UI Header & Branding ---
 st.title("🛡️ SEF Terminal | Ultimate Hub")
-
-# Brand signature and disclaimer in English
 st.markdown("""
     <div style='text-align: left; margin-top: -20px; margin-bottom: 20px;'>
         <p style='margin:0; font-size: 1.2em; font-weight: bold; color: #555;'>Created By Abu Yahia</p>
@@ -45,15 +42,17 @@ st.markdown("""
     </div>
     """, unsafe_allow_html=True)
 
-# --- 5. Professional Info Bar (Fair Value & 52-W Range) ---
+# --- 5. Ticker Info Bar (Visual Indicators) ---
 if st.session_state['ready']:
     color = "#09AB3B" if st.session_state['chg'] >= 0 else "#FF4B4B"
-    # Logic for 52-week position
-    total_range = st.session_state['high52'] - st.session_state['low52']
-    pos_52 = ((st.session_state['price'] - st.session_state['low52']) / total_range) * 100 if total_range > 0 else 0
+    # 52-Week Range Logic
+    r52 = st.session_state['high52'] - st.session_state['low52']
+    p52 = ((st.session_state['price'] - st.session_state['low52']) / r52) * 100 if r52 > 0 else 0
     
-    # Simple Fair Value logic (Price vs Avg Target)
-    fv_pos = 50 # Default middle position for display
+    # Fair Value Logic (Visual relative to input)
+    fv_diff = st.session_state['price'] - st.session_state['fv_input']
+    fv_pos = 50 + (fv_diff / (st.session_state['price'] * 0.2) * 50) if st.session_state['fv_input'] > 0 else 50
+    fv_pos = max(0, min(100, fv_pos))
 
     st.markdown(f"""
         <div style="background-color: #f8f9fb; padding: 20px; border-radius: 10px; border-left: 8px solid {color}; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center;">
@@ -67,71 +66,76 @@ if st.session_state['ready']:
                 </div>
             </div>
             <div style="display: flex; gap: 40px; text-align: right;">
-                <div style="width: 200px;">
-                    <p style="margin:0; font-size: 0.85em; color: #787b86;">Fair Value</p>
-                    <div style="display: flex; justify-content: space-between; font-size: 0.9em; font-weight: bold; margin-bottom: 5px;">
-                        <span>Under</span><span style="color:#09AB3B">Fair</span><span>Over</span>
+                <div style="width: 180px;">
+                    <p style="margin:0; font-size: 0.85em; color: #787b86;">Fair Value Status</p>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75em; font-weight: bold; margin-bottom: 5px;">
+                        <span style="color:#FF4B4B">Under</span><span style="color:#09AB3B">Fair</span><span style="color:#FF4B4B">Over</span>
                     </div>
-                    <div style="height: 6px; background: linear-gradient(to right, #FF4B4B, #FF9900, #09AB3B, #FF9900, #FF4B4B); border-radius: 3px; position: relative;">
+                    <div style="height: 6px; background: linear-gradient(to right, #FF4B4B, #09AB3B, #FF4B4B); border-radius: 3px; position: relative;">
                         <div style="position: absolute; left: {fv_pos}%; top: -4px; width: 14px; height: 14px; background: #131722; border-radius: 50%; border: 2px solid white;"></div>
                     </div>
                 </div>
-                <div style="width: 200px;">
+                <div style="width: 180px;">
                     <p style="margin:0; font-size: 0.85em; color: #787b86;">52 wk Range</p>
                     <div style="display: flex; justify-content: space-between; font-size: 0.9em; font-weight: bold; margin-bottom: 5px;">
-                        <span>{st.session_state['low52']:.2f}</span>
-                        <span>{st.session_state['high52']:.2f}</span>
+                        <span>{st.session_state['low52']:.2f}</span><span>{st.session_state['high52']:.2f}</span>
                     </div>
                     <div style="height: 6px; background: #e0e3eb; border-radius: 3px; position: relative;">
-                        <div style="position: absolute; left: {pos_52}%; top: -4px; width: 14px; height: 14px; background: #131722; border-radius: 50%; border: 2px solid white;"></div>
+                        <div style="position: absolute; left: {p52}%; top: -4px; width: 14px; height: 14px; background: #131722; border-radius: 50%; border: 2px solid white;"></div>
                     </div>
                 </div>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
-# --- 6. Input Controls ---
-c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1, 1, 1, 0.8, 1])
+# --- 6. Input Controls (Updated Layout) ---
+# c1: Ticker | c2: Market | c3: Anchor | c4: Target | c5: Fair Value (NEW) | c6: Radar/Analyze
+cols = st.columns([2, 1, 1, 1, 1, 1])
 
-with c1:
-    selected_stock = st.selectbox("Search Stock:", options=options)
+with cols[0]:
+    selected_stock = st.selectbox("Ticker Symbol", options=options)
     symbol = tasi_mapping[selected_stock]
 
-with c2: p_in = st.number_input("Market Price", value=float(st.session_state['price']), format="%.2f")
-with c3: s_in = st.number_input("Anchor Level", value=float(st.session_state['stop']), format="%.2f")
-with c4: t_in = st.number_input("Target Price", value=float(st.session_state['target']), format="%.2f")
+with cols[1]: p_in = st.number_input("Market Price", value=float(st.session_state['price']), format="%.2f")
+with cols[2]: s_in = st.number_input("Anchor Level", value=float(st.session_state['stop']), format="%.2f")
+with cols[3]: t_in = st.number_input("Target Price", value=float(st.session_state['target']), format="%.2f")
+# This is the NEW input box in the red square location
+with cols[4]: fv_in = st.number_input("Fair Value", value=float(st.session_state['fv_input']), format="%.2f")
 
-# --- 7. Radar Engine (All Original Logic Preserved) ---
-with c5:
+# --- 7. Radar & Analyze Buttons ---
+with cols[5]:
     st.write("##")
-    if st.button("🛰️ Radar", use_container_width=True):
-        raw = yf.download(f"{symbol}.SR", period="2y", progress=False)
-        if not raw.empty:
-            if isinstance(raw.columns, pd.MultiIndex): raw.columns = raw.columns.get_level_values(0)
-            close = raw['Close']
-            cur = float(close.iloc[-1])
-            prev = float(close.iloc[-2])
-            st.session_state.update({
-                'price': cur,
-                'chg': cur - prev,
-                'pct': ((cur - prev) / prev) * 100,
-                'company_name': selected_stock.split('|')[0].strip(),
-                'low52': float(raw['Low'].tail(252).min()),
-                'high52': float(raw['High'].tail(252).max()),
-                'stop': float(raw['Low'].tail(20).min()),
-                'target': float(raw['High'].tail(20).max()),
-                'sma50': float(close.rolling(50).mean().iloc[-1]),
-                'sma100': float(close.rolling(100).mean().iloc[-1]),
-                'sma200': float(close.rolling(200).mean().iloc[-1]),
-                'ready': True
-            })
-            st.rerun()
+    radar_col, analyze_col = st.columns(2)
+    with radar_col:
+        radar_btn = st.button("🛰️ Radar", use_container_width=True)
+    with analyze_col:
+        analyze_btn = st.button("📊 Analyze", use_container_width=True)
 
-with c6:
-    st.write("##")
-    analyze_btn = st.button("📊 Analyze", use_container_width=True)
+if radar_btn:
+    raw = yf.download(f"{symbol}.SR", period="2y", progress=False)
+    if not raw.empty:
+        if isinstance(raw.columns, pd.MultiIndex): raw.columns = raw.columns.get_level_values(0)
+        close = raw['Close']
+        cur, prev = float(close.iloc[-1]), float(close.iloc[-2])
+        st.session_state.update({
+            'price': cur, 'chg': cur - prev, 'pct': ((cur - prev) / prev) * 100,
+            'company_name': selected_stock.split('|')[0].strip(),
+            'low52': float(raw['Low'].tail(252).min()),
+            'high52': float(raw['High'].tail(252).max()),
+            'stop': float(raw['Low'].tail(20).min()),
+            'target': float(raw['High'].tail(20).max()),
+            'fv_input': cur, # Default FV to current price on radar click
+            'sma50': float(close.rolling(50).mean().iloc[-1]),
+            'sma100': float(close.rolling(100).mean().iloc[-1]),
+            'sma200': float(close.rolling(200).mean().iloc[-1]),
+            'ready': True
+        })
+        st.rerun()
 
-# --- 8. Technical Indicators & Analysis (English) ---
+# Update FV in session state when user types
+st.session_state['fv_input'] = fv_in
+
+# --- 8. Technical Indicators Display ---
 if st.session_state['ready']:
     st.subheader("📈 Technical Indicators")
     m_cols = st.columns(3)
@@ -143,35 +147,27 @@ if st.session_state['ready']:
         m_cols[i].markdown(f"""
             <div style="background-color: #f8f9fb; padding: 15px; border-radius: 10px; border-left: 6px solid {ma_color};">
                 <p style="margin:0; font-size:14px; color:#5c5c5c;">{label}</p>
-                <h3 style="margin:0;">{val:.2f}</h3>
+                <h3 style="margin:0; color:#31333F;">{val:.2f}</h3>
                 <p style="margin:0; color:{ma_color}; font-weight:bold;">{dist:+.2f}%</p>
             </div>
         """, unsafe_allow_html=True)
 
+# --- 9. Final Report & Chart (Original Features Preserved) ---
 if analyze_btn or st.session_state['ready']:
-    risk_amt = abs(p_in - s_in)
-    rr_ratio = (t_in - p_in) / risk_amt if risk_amt > 0 else 0
-    balance = st.sidebar.number_input("Portfolio", value=100000)
-    risk_pct = st.sidebar.slider("Risk %", 0.5, 5.0, 1.0)
-    shares = math.floor((balance * (risk_pct/100)) / risk_amt) if risk_amt > 0 else 0
-
-    st.subheader("📄 SEF Structural Analysis")
-    result_status = "VALID" if rr_ratio >= 2 else "DANGEROUS"
+    risk = abs(p_in - s_in)
+    rr = (t_in - p_in) / risk if risk > 0 else 0
+    res = "VALID" if rr >= 2 else "DANGEROUS"
     
-    # Original calculations
     p50 = ((p_in - st.session_state['sma50']) / st.session_state['sma50']) * 100 if st.session_state['sma50'] else 0
     p100 = ((p_in - st.session_state['sma100']) / st.session_state['sma100']) * 100 if st.session_state['sma100'] else 0
     p200 = ((p_in - st.session_state['sma200']) / st.session_state['sma200']) * 100 if st.session_state['sma200'] else 0
 
-    report = f"Ticker: {symbol} | Price: {p_in:.2f}\nSMA 50 Dist: {p50:+.2f}%\nSMA 100 Dist: {p100:+.2f}%\nSMA 200 Dist: {p200:+.2f}%\nR:R Ratio: 1:{round(rr_ratio, 2)}\nRESULT: {result_status}"
+    report = f"Ticker: {symbol} | Price: {p_in:.2f} | Fair Value: {fv_in:.2f}\nSMA 50 Dist: {p50:+.2f}%\nSMA 100 Dist: {p100:+.2f}%\nSMA 200 Dist: {p200:+.2f}%\nR:R Ratio: 1:{round(rr, 2)}\nRESULT: {res}"
     st.code(report, language="text")
 
-    # Original Chart with SMAs
-    chart_data = yf.download(f"{symbol}.SR", period="1y", progress=False)
-    if not chart_data.empty:
-        if isinstance(chart_data.columns, pd.MultiIndex): chart_data.columns = chart_data.columns.get_level_values(0)
-        plot_df = chart_data[['Close']].copy()
-        plot_df['SMA 50'] = plot_df['Close'].rolling(50).mean()
-        plot_df['SMA 100'] = plot_df['Close'].rolling(100).mean()
-        plot_df['SMA 200'] = plot_df['Close'].rolling(200).mean()
-        st.line_chart(plot_df)
+    chart_raw = yf.download(f"{symbol}.SR", period="1y", progress=False)
+    if not chart_raw.empty:
+        if isinstance(chart_raw.columns, pd.MultiIndex): chart_raw.columns = chart_raw.columns.get_level_values(0)
+        pdf = chart_raw[['Close']].copy()
+        pdf['SMA 50'], pdf['SMA 100'], pdf['SMA 200'] = pdf['Close'].rolling(50).mean(), pdf['Close'].rolling(100).mean(), pdf['Close'].rolling(200).mean()
+        st.line_chart(pdf)

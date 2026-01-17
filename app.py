@@ -2,13 +2,38 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import math
+import os
 from fpdf import FPDF
 
 # --- 1. Page Config ---
 st.set_page_config(page_title="SEF Terminal Pro", layout="wide")
 st.markdown("<style>.stAppToolbar {display: none;}</style>", unsafe_allow_html=True)
 
-# --- 2. Load TASI Data ---
+# --- 2. Database Logic (ميزة الحفظ والاسترجاع الجديدة) ---
+HISTORY_FILE = "stock_data_history.csv"
+
+def save_data(ticker, stop, target, fv):
+    if os.path.exists(HISTORY_FILE):
+        df = pd.read_csv(HISTORY_FILE)
+    else:
+        df = pd.DataFrame(columns=['Ticker', 'Stop', 'Target', 'FairValue'])
+    
+    if ticker in df['Ticker'].values:
+        df.loc[df['Ticker'] == ticker, ['Stop', 'Target', 'FairValue']] = [float(stop), float(target), float(fv)]
+    else:
+        new_row = pd.DataFrame([{'Ticker': ticker, 'Stop': float(stop), 'Target': float(target), 'FairValue': float(fv)}])
+        df = pd.concat([df, new_row], ignore_index=True)
+    df.to_csv(HISTORY_FILE, index=False)
+
+def load_data(ticker):
+    if os.path.exists(HISTORY_FILE):
+        df = pd.read_csv(HISTORY_FILE)
+        row = df[df['Ticker'] == ticker]
+        if not row.empty:
+            return float(row.iloc[0]['Stop']), float(row.iloc[0]['Target']), float(row.iloc[0]['FairValue'])
+    return 0.0, 0.0, 0.0
+
+# --- 3. Load TASI Data ---
 @st.cache_data
 def load_tasi_data():
     try:
@@ -24,16 +49,17 @@ def load_tasi_data():
 
 options, tasi_mapping = load_tasi_data()
 
-# --- 3. Secure Session State ---
+# --- 4. Secure Session State ---
 if 'ready' not in st.session_state:
     st.session_state.update({
         'price': 0.0, 'stop': 0.0, 'target': 0.0, 'fv_val': 0.0,
         'sma50': 0.0, 'sma100': 0.0, 'sma200': 0.0, 
         'ready': False, 'company_name': '---',
-        'chg': 0.0, 'pct': 0.0, 'low52': 0.0, 'high52': 1.0
+        'chg': 0.0, 'pct': 0.0, 'low52': 0.0, 'high52': 1.0,
+        'last_symbol': ''
     })
 
-# --- 4. Main UI Header & Branding ---
+# --- 5. Main UI Header & Branding ---
 st.title("🛡️ SEF Terminal | Ultimate Hub")
 
 st.markdown("""
@@ -43,7 +69,7 @@ st.markdown("""
     </div>
     """, unsafe_allow_html=True)
 
-# --- 5. Ticker Info Bar ---
+# --- 6. Ticker Info Bar ---
 if st.session_state['ready']:
     color = "#09AB3B" if st.session_state['chg'] >= 0 else "#FF4B4B"
     total_range = st.session_state['high52'] - st.session_state['low52']
@@ -91,11 +117,16 @@ if st.session_state['ready']:
         </div>
     """, unsafe_allow_html=True)
 
-# --- 6. Input Controls ---
+# --- 7. Input Controls ---
 c1, c2, c3, c4, c5, c6 = st.columns([2.0, 0.8, 0.8, 0.8, 0.8, 1.2])
 with c1:
     selected_stock = st.selectbox("Search Stock:", options=options)
     symbol = tasi_mapping[selected_stock]
+    # ميزة الاستدعاء التلقائي عند تغيير السهم
+    if symbol != st.session_state['last_symbol']:
+        s_s, t_s, fv_s = load_data(symbol)
+        st.session_state.update({'stop': s_s, 'target': t_s, 'fv_val': fv_s, 'last_symbol': symbol})
+
 with c2: p_in = st.number_input("Market Price", value=float(st.session_state['price']), format="%.2f")
 with c3: s_in = st.number_input("Anchor Level", value=float(st.session_state['stop']), format="%.2f")
 with c4: t_in = st.number_input("Target Price", value=float(st.session_state['target']), format="%.2f")
@@ -107,7 +138,7 @@ with c6:
     with btn_col1: radar_btn = st.button("🛰️ Radar", use_container_width=True)
     with btn_col2: analyze_btn = st.button("📊 Analyze", use_container_width=True)
 
-# --- 7. Radar Logic ---
+# --- 8. Radar Logic ---
 if radar_btn:
     raw = yf.download(f"{symbol}.SR", period="2y", progress=False)
     if not raw.empty:
@@ -119,9 +150,6 @@ if radar_btn:
             'company_name': selected_stock.split('|')[0].strip(),
             'low52': float(raw['Low'].tail(252).min()),
             'high52': float(raw['High'].tail(252).max()),
-            'stop': float(raw['Low'].tail(20).min()),
-            'target': float(raw['High'].tail(20).max()),
-            'fv_val': cur,
             'sma50': float(close.rolling(50).mean().iloc[-1]),
             'sma100': float(close.rolling(100).mean().iloc[-1]),
             'sma200': float(close.rolling(200).mean().iloc[-1]),
@@ -129,9 +157,12 @@ if radar_btn:
         })
         st.rerun()
 
-st.session_state['fv_val'] = fv_in
+if analyze_btn:
+    # ميزة الحفظ عند الضغط على التحليل
+    save_data(symbol, s_in, t_in, fv_in)
+    st.session_state.update({'stop': s_in, 'target': t_in, 'fv_val': fv_in, 'ready': True})
 
-# --- 8. Technical Indicators Display ---
+# --- 9. Technical Indicators Display ---
 if st.session_state['ready']:
     st.subheader("📈 Technical Indicators")
     m_cols = st.columns(3)
@@ -148,8 +179,8 @@ if st.session_state['ready']:
             </div>
         """, unsafe_allow_html=True)
 
-# --- 9. THE STRATEGIC REPORT (هذا هو التعديل المطلوب فقط) ---
-if analyze_btn or st.session_state['ready']:
+# --- 10. THE STRATEGIC REPORT ---
+if st.session_state['ready']:
     st.markdown("---")
     risk_amt = abs(p_in - s_in)
     rr_ratio = (t_in - p_in) / risk_amt if risk_amt > 0 else 0
@@ -157,14 +188,12 @@ if analyze_btn or st.session_state['ready']:
     risk_pct = st.sidebar.slider("Risk %", 0.5, 5.0, 1.0)
     shares = math.floor((balance * (risk_pct/100)) / risk_amt) if risk_amt > 0 else 0
 
-    # حسابات المسافات للمتوسطات كما في النسخة الأولى
     p50 = ((p_in - st.session_state['sma50']) / st.session_state['sma50']) * 100 if st.session_state['sma50'] else 0
     p100 = ((p_in - st.session_state['sma100']) / st.session_state['sma100']) * 100 if st.session_state['sma100'] else 0
     p200 = ((p_in - st.session_state['sma200']) / st.session_state['sma200']) * 100 if st.session_state['sma200'] else 0
     
     result_status = "VALID (Good Risk/Reward)" if rr_ratio >= 2 else "DANGEROUS (Avoid - Poor Reward)"
 
-    # العودة لتنسيق التقرير الاستراتيجي الأصلي
     report_text = f"""
     SEF STRATEGIC ANALYSIS REPORT
     Created By Abu Yahia
@@ -191,7 +220,6 @@ if analyze_btn or st.session_state['ready']:
     st.subheader("📄 SEF Structural Analysis")
     st.code(report_text, language="text")
 
-    # Chart with SMAs
     chart_data = yf.download(f"{symbol}.SR", period="1y", progress=False)
     if not chart_data.empty:
         if isinstance(chart_data.columns, pd.MultiIndex): chart_data.columns = chart_data.columns.get_level_values(0)

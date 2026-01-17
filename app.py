@@ -3,24 +3,22 @@ import pandas as pd
 import yfinance as yf
 import math
 from fpdf import FPDF
-from streamlit_gsheets import GSheetsConnection
 
 # --- 1. Page Config ---
 st.set_page_config(page_title="SEF Terminal Pro", layout="wide")
 st.markdown("<style>.stAppToolbar {display: none;}</style>", unsafe_allow_html=True)
 
-# --- 2. Google Sheets Connection (Official Cloud Method) ---
-conn = st.connection("gsheets", type=GSheetsConnection)
+# --- 2. Database Logic (GitHub File) ---
+DB_FILE = "stock_database.csv"
 
-def load_data_from_sheet(ticker):
+def load_stored_data(ticker):
     try:
-        # قراءة البيانات من الرابط الموجود في Secrets
-        df = conn.read(ttl=0) # ttl=0 لضمان قراءة أحدث بيانات دائماً
-        row = df[df['Ticker'].astype(str) == str(ticker)]
+        df = pd.read_csv(DB_FILE)
+        df['Ticker'] = df['Ticker'].astype(str).str.strip()
+        row = df[df['Ticker'] == str(ticker).strip()]
         if not row.empty:
             return float(row.iloc[0]['Stop']), float(row.iloc[0]['Target']), float(row.iloc[0]['FairValue'])
-    except:
-        pass
+    except: pass
     return 0.0, 0.0, 0.0
 
 # --- 3. Load TASI Data ---
@@ -34,8 +32,7 @@ def load_tasi_data():
         df['Display'] = df['Name_Ar'] + " | " + df['Ticker']
         mapping = dict(zip(df['Display'], df['Ticker']))
         return sorted(list(mapping.keys())), mapping
-    except:
-        return [], {}
+    except: return [], {}
 
 options, tasi_mapping = load_tasi_data()
 
@@ -49,7 +46,7 @@ if 'ready' not in st.session_state:
         'last_symbol': ''
     })
 
-# --- 5. Main UI Header ---
+# --- 5. Main UI ---
 st.title("🛡️ SEF Terminal | Ultimate Hub")
 st.markdown("<p style='font-weight: bold; color: #555;'>Created By Abu Yahia</p>", unsafe_allow_html=True)
 
@@ -59,11 +56,9 @@ c1, c2, c3, c4, c5, c6 = st.columns([2.0, 0.8, 0.8, 0.8, 0.8, 1.2])
 with c1:
     selected_stock = st.selectbox("Search Stock:", options=options)
     symbol = tasi_mapping[selected_stock]
-    
-    # استرجاع القيم تلقائياً عند تغيير السهم
     if symbol != st.session_state['last_symbol']:
-        s_s, t_s, fv_s = load_data_from_sheet(symbol)
-        st.session_state.update({'stop': s_s, 'target': t_s, 'fv_val': fv_s, 'last_symbol': symbol})
+        s_db, t_db, fv_db = load_stored_data(symbol)
+        st.session_state.update({'stop': s_db, 'target': t_db, 'fv_val': fv_db, 'last_symbol': symbol})
 
 p_in = c2.number_input("Market Price", value=float(st.session_state['price']), format="%.2f")
 s_in = c3.number_input("Anchor Level", value=float(st.session_state['stop']), format="%.2f")
@@ -90,12 +85,10 @@ with c6:
                 'ready': True
             })
             st.rerun()
+    analyze_btn = b2.button("📊 Analyze", use_container_width=True)
 
-    if b2.button("📊 Analyze", use_container_width=True):
-        st.session_state.update({'stop': s_in, 'target': t_in, 'fv_val': fv_in, 'ready': True})
-
-# --- 8. THE STRATEGIC REPORT (نفس تنسيق app 5 الأصلي) ---
-if st.session_state['ready']:
+# --- 8. Report ---
+if st.session_state['ready'] or analyze_btn:
     st.markdown("---")
     risk_amt = abs(p_in - s_in)
     rr_ratio = (t_in - p_in) / risk_amt if risk_amt > 0 else 0
@@ -124,7 +117,7 @@ Ticker: {symbol}.SR | Price: {p_in:.2f} | Fair Value: {fv_in:.2f}
 
 3. METRICS:
 - R:R Ratio: 1:{round(rr_ratio, 2)}
-- Quantity: {shares} Shares | Risk Cash: {balance * (risk_pct/100):.2f}
+- Quantity: {shares} Shares | Risk: {balance * (risk_pct/100):.2f}
 
 RESULT: {res_status}
 ------------------------------"""
@@ -132,7 +125,7 @@ RESULT: {res_status}
     st.subheader("📄 Strategic Analysis Report")
     st.code(report_text, language="text")
 
-    # --- زر التحميل PDF (موجود وشغال) ---
+    # PDF Export
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=10)

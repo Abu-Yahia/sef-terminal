@@ -104,14 +104,18 @@ if st.session_state['ready']:
     """, unsafe_allow_html=True)
 
 # --- 7. Input Controls ---
-c1, c2, c3, c4, c5, c6 = st.columns([2.0, 0.8, 0.8, 0.8, 0.8, 1.2])
 with c1:
     selected_stock = st.selectbox("Search Stock:", options=options)
     symbol = tasi_mapping[selected_stock]
-with c2: p_in = st.number_input("Market Price", value=float(st.session_state['price']), format="%.2f")
-with c3: s_in = st.number_input("Anchor Level", value=float(st.session_state['stop']), format="%.2f")
-with c4: t_in = st.number_input("Target Price", value=float(st.session_state['target']), format="%.2f")
-with c5: fv_in = st.number_input("Fair Value", value=float(st.session_state['fv_val']), format="%.2f")
+    
+    if symbol != st.session_state.get('last_symbol', ''):
+        s_db, t_db, fv_db = load_stored_data(symbol)
+        st.session_state.update({
+            'stop': s_db, 
+            'target': t_db, 
+            'fv_val': fv_db, 
+            'last_symbol': symbol
+        })
 
 with c6:
     st.write("##")
@@ -212,3 +216,4 @@ if analyze_btn or st.session_state['ready']:
         plot_df['SMA 100'] = plot_df['Close'].rolling(100).mean()
         plot_df['SMA 200'] = plot_df['Close'].rolling(200).mean()
         st.line_chart(plot_df)
+

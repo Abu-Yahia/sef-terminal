@@ -24,7 +24,7 @@ def load_tasi_data():
 
 options, tasi_mapping = load_tasi_data()
 
-# --- 3. Secure Session State (Initialize all keys to avoid KeyError) ---
+# --- 3. Secure Session State (Essential for SMAs) ---
 if 'ready' not in st.session_state:
     st.session_state.update({
         'price': 0.0, 'stop': 0.0, 'target': 0.0,
@@ -33,25 +33,24 @@ if 'ready' not in st.session_state:
         'chg': 0.0, 'pct': 0.0, 'low52': 0.0, 'high52': 1.0
     })
 
-# --- 4. Main UI Header & Branding ---
+# --- 4. Main UI Header & Signature ---
 st.title("🛡️ SEF Terminal | Ultimate Hub")
 
-# Placement of signature and disclaimer as per your image
 st.markdown("""
     <div style='text-align: left; margin-top: -20px; margin-bottom: 20px;'>
         <p style='margin:0; font-size: 1.2em; font-weight: bold; color: #555;'>Created By Abu Yahia</p>
-        <p style='margin:0; font-size: 0.85em; color: #cc0000;'>⚠️ This App Educational purposes only. Not financial advice.(DYOR)</p>
+        <p style='margin:0; font-size: 0.85em; color: #cc0000;'>⚠️ Educational purposes only. Not financial advice.</p>
     </div>
     """, unsafe_allow_html=True)
 
-# --- 5. Ticker Info Bar (52-Week Range Included) ---
+# --- 5. Ticker Info Bar & 52-Week Range ---
 if st.session_state['ready']:
     color = "#09AB3B" if st.session_state['chg'] >= 0 else "#FF4B4B"
     total_range = st.session_state['high52'] - st.session_state['low52']
     pos_52 = ((st.session_state['price'] - st.session_state['low52']) / total_range) * 100 if total_range > 0 else 0
     
     st.markdown(f"""
-        <div style="background-color: #f8f9fb; padding: 20px; border-radius: 10px; border-left: 8px solid {color}; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
+        <div style="background-color: #f8f9fb; padding: 20px; border-radius: 10px; border-left: 8px solid {color}; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center;">
             <div>
                 <h2 style="margin: 0; color: #131722; font-size: 1.6em;">{st.session_state['company_name']}</h2>
                 <div style="display: flex; align-items: baseline; gap: 15px; margin-top: 10px;">
@@ -76,16 +75,14 @@ if st.session_state['ready']:
 
 # --- 6. Input Controls ---
 c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1, 1, 1, 0.8, 1])
-
 with c1:
     selected_stock = st.selectbox("Search Stock:", options=options)
     symbol = tasi_mapping[selected_stock]
-
 with c2: p_in = st.number_input("Market Price", value=float(st.session_state['price']), format="%.2f")
 with c3: s_in = st.number_input("Anchor Level", value=float(st.session_state['stop']), format="%.2f")
 with c4: t_in = st.number_input("Target Price", value=float(st.session_state['target']), format="%.2f")
 
-# --- 7. Radar Engine ---
+# --- 7. Radar Engine (Includes SMAs Calculation) ---
 with c5:
     st.write("##")
     if st.button("🛰️ Radar", use_container_width=True):
@@ -115,23 +112,27 @@ with c6:
     st.write("##")
     analyze_btn = st.button("📊 Analyze", use_container_width=True)
 
-# --- 8. Results & Technical Indicators (Original Logic Preserved) ---
+# --- 8. Technical Indicators Display ---
 if st.session_state['ready']:
     st.subheader("📈 Technical Indicators")
     m_cols = st.columns(3)
-    ma_list = [("SMA 50", st.session_state['sma50']), ("SMA 100", st.session_state['sma100']), ("SMA 200", st.session_state['sma200'])]
-    for i, (label, val) in enumerate(ma_list):
+    ma_data = [("SMA 50", st.session_state['sma50']), 
+               ("SMA 100", st.session_state['sma100']), 
+               ("SMA 200", st.session_state['sma200'])]
+    
+    for i, (label, val) in enumerate(ma_data):
         diff = p_in - val
-        indicator_color = "#FF4B4B" if diff < 0 else "#09AB3B"
-        dist_pct = (diff / val) * 100 if val != 0 else 0
+        ma_color = "#FF4B4B" if diff < 0 else "#09AB3B"
+        dist = (diff / val) * 100 if val != 0 else 0
         m_cols[i].markdown(f"""
-            <div style="background-color: #f8f9fb; padding: 15px; border-radius: 10px; border-left: 6px solid {indicator_color};">
+            <div style="background-color: #f8f9fb; padding: 15px; border-radius: 10px; border-left: 6px solid {ma_color};">
                 <p style="margin:0; font-size:14px; color:#5c5c5c;">{label}</p>
-                <h3 style="margin:0; color:#31333F;">{val:.2f}</h3>
-                <p style="margin:0; font-size:16px; color:{indicator_color}; font-weight:bold;">{dist_pct:+.2f}%</p>
+                <h3 style="margin:0;">{val:.2f}</h3>
+                <p style="margin:0; color:{ma_color}; font-weight:bold;">{dist:+.2f}%</p>
             </div>
         """, unsafe_allow_html=True)
 
+# --- 9. Analysis Results & Chart ---
 if analyze_btn or st.session_state['ready']:
     st.markdown("---")
     risk_amt = abs(p_in - s_in)
@@ -146,20 +147,17 @@ if analyze_btn or st.session_state['ready']:
     t_cols[2].metric("Shares", f"{shares}")
     t_cols[3].metric("Risk Cash", f"{balance * (risk_pct/100):.2f}")
 
-    st.subheader("📄 SEF Structural Analysis")
-    result_status = "DANGEROUS (Avoid - Poor Reward)" if rr_ratio < 2 else "VALID (Good Risk/Reward)"
-    
-    p50 = ((p_in - st.session_state['sma50']) / st.session_state['sma50']) * 100 if st.session_state['sma50'] else 0
-    p100 = ((p_in - st.session_state['sma100']) / st.session_state['sma100']) * 100 if st.session_state['sma100'] else 0
-    p200 = ((p_in - st.session_state['sma200']) / st.session_state['sma200']) * 100 if st.session_state['sma200'] else 0
+    # Text Report
+    res_status = "VALID" if rr_ratio >= 2 else "DANGEROUS"
+    report = f"Ticker: {symbol} | Price: {p_in:.2f}\nSMA50: {st.session_state['sma50']:.2f}\nSMA100: {st.session_state['sma100']:.2f}\nSMA200: {st.session_state['sma200']:.2f}\nResult: {res_status}"
+    st.code(report, language="text")
 
-    report_text = f"SEF STRATEGIC ANALYSIS REPORT\nCreated By Abu Yahia\n------------------------------\nTicker: {symbol}.SR | Price: {p_in:.2f}\nEntry: {p_in:.2f} | Anchor (SL): {s_in:.2f} | Target: {t_in:.2f}\nSMA 50 Dist: {p50:+.2f}%\nSMA 100 Dist: {p100:+.2f}%\nSMA 200 Dist: {p200:+.2f}%\nR:R Ratio: 1:{round(rr_ratio, 2)}\nQuantity: {shares} Shares\nRESULT: {result_status}\n------------------------------\nCapital preservation is the first priority."
-    
-    st.code(report_text, language="text")
-
-    # Chart Generation
-    chart_raw = yf.download(f"{symbol}.SR", period="1y", progress=False)
-    if not chart_raw.empty:
-        if isinstance(chart_raw.columns, pd.MultiIndex): chart_raw.columns = chart_raw.columns.get_level_values(0)
-        st.line_chart(chart_raw['Close'])
-
+    # Chart with SMAs
+    chart_data = yf.download(f"{symbol}.SR", period="1y", progress=False)
+    if not chart_data.empty:
+        if isinstance(chart_data.columns, pd.MultiIndex): chart_data.columns = chart_data.columns.get_level_values(0)
+        plot_df = chart_data[['Close']].copy()
+        plot_df['SMA 50'] = plot_df['Close'].rolling(50).mean()
+        plot_df['SMA 100'] = plot_df['Close'].rolling(100).mean()
+        plot_df['SMA 200'] = plot_df['Close'].rolling(200).mean()
+        st.line_chart(plot_df)
